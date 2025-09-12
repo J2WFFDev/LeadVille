@@ -1,0 +1,89 @@
+# LeadVille Impact Bridge - Git Ignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Logs and Data (keep structure, ignore content)
+logs/console/*.log
+logs/debug/*.log  
+logs/main/*.csv
+logs/main/*.json
+logs/main/*.ndjson
+
+# Configuration (optional - may want to track dev configs)
+# config/local_*.json
+# config/production_*.json
+
+# Calibration and Runtime Data
+*.db
+timing_calibration.json
+statistical_timing_data.json
+
+# Development artifacts
+*.tmp
+*.backup
+test_*.py
+debug_*.py
+analyze_*.py
+
+# System files
+.pytest_cache/
+.coverage
+.mypy_cache/
+.tox/
+
+# Documentation build
+docs/_build/
+site/
+
+# Package files
+*.tar.gz
+*.zip
+*.rar
+
+# Jupyter Notebooks (if any added later)
+.ipynb_checkpoints/

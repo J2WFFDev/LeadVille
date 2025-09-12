@@ -1,0 +1,34 @@
+{
+  "enhanced_impact": {
+    "enabled": true,
+    "peak_threshold": 150.0,
+    "onset_threshold": 30.0,
+    "lookback_samples": 10
+  },
+  "shot_detection": {
+    "threshold": 150.0,
+    "min_duration": 6,
+    "max_duration": 11,
+    "min_interval_seconds": 1.0
+  },
+  "timing": {
+    "expected_delay_ms": 526.0,
+    "correlation_window_ms": 2000,
+    "enable_statistical_calibration": true
+  },
+  "logging": {
+    "console_level": "INFO",
+    "file_level": "DEBUG",
+    "enable_raw_data_logging": false
+  },
+  "ble": {
+    "connection_timeout_seconds": 10,
+    "auto_reconnect": true,
+    "reset_on_startup": false
+  },
+  "sensor": {
+    "calibration_samples": 100,
+    "calibration_timeout_seconds": 30,
+    "auto_calibrate_on_startup": true
+  }
+}
