@@ -76,7 +76,7 @@ class DevelopmentConfig:
         # Load configuration file if it exists
         self._load_config()
         
-        logger.info("Development configuration initialized")
+        # Suppress automatic logging - manual message in main bridge
     
     def _load_config(self):
         """Load configuration from file"""
