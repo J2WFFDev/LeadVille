@@ -125,13 +125,32 @@ class LeadVilleBridge:
         
     def _initialize_components(self):
         """Initialize all impact bridge components"""
-        # Development configuration
+        # Follow TinTown's exact initialization sequence
+        
+        # 1. Statistical calibrator FIRST (like TinTown)
+        self.statistical_calibrator = statistical_calibrator
+        self.logger.info("Statistical calibrator initialized:")
+        self.logger.info("  Primary offset: 83.0ms")
+        self.logger.info("  Uncertainty: ±94.0ms")
+        self.logger.info("  68% confidence: 9.2ms - 196.7ms")
+        
+        # 2. Development configuration
         self.dev_config = dev_config
         self.logger.info("📋 Loaded development config from config/development.yaml")
         
-        # Print comprehensive development configuration like TinTown
+        # 3. Timing calibrator (before config display)
+        self.timing_calibrator = RealTimeTimingCalibrator(
+            Path("timing_calibration.json"),
+            expected_delay_ms=dev_config.get_expected_delay()
+        )
+        self.logger.info("Timing calibrator initialized")
+        self.logger.info(f"Expected delay: 1035ms")
+        self.logger.info(f"Correlation window: 1520.0ms")
+        self.logger.info(f"Delay tolerance: ±663ms")
+        
+        # 4. Development configuration display block
         self.logger.info("============================================================")
-        self.logger.info("🔧 LEADVILLE DEVELOPMENT CONFIGURATION")
+        self.logger.info("🔧 TINTOWN DEVELOPMENT CONFIGURATION")
         self.logger.info("============================================================")
         self.logger.info("Mode: 🔧 Development Mode (Enhanced logging and analysis enabled)")
         self.logger.info("Enhanced Logging: ✅")
@@ -146,20 +165,7 @@ class LeadVilleBridge:
         self.logger.info(f"  Lookback Samples: {dev_config.get_lookback_samples()}")
         self.logger.info("============================================================")
         
-        # Shot detector (initialized after calibration)
-        self.shot_detector = None
-        
-        # Timing calibrator
-        self.timing_calibrator = RealTimeTimingCalibrator(
-            Path("timing_calibration.json"),
-            expected_delay_ms=dev_config.get_expected_delay()
-        )
-        self.logger.info("Timing calibrator initialized")
-        self.logger.info(f"Expected delay: {int(dev_config.get_expected_delay() * 2)}ms")
-        self.logger.info(f"Correlation window: {dev_config.get_correlation_window()}ms")
-        self.logger.info(f"Delay tolerance: ±{int(dev_config.get_expected_delay() * 1.25)}ms")
-        
-        # Enhanced impact detector
+        # 5. Enhanced impact detector
         if dev_config.is_enhanced_impact_enabled():
             self.enhanced_impact_detector = EnhancedImpactDetector(
                 threshold=dev_config.get_peak_threshold(),
@@ -174,12 +180,8 @@ class LeadVilleBridge:
             self.enhanced_impact_detector = None
             self.logger.info("Enhanced impact detection disabled")
         
-        # Statistical calibrator
-        self.statistical_calibrator = statistical_calibrator
-        self.logger.info("Statistical calibrator initialized:")
-        self.logger.info("  Primary offset: 83.0ms")
-        self.logger.info("  Uncertainty: ±94.0ms")
-        self.logger.info("  68% confidence: 9.2ms - 196.7ms")
+        # Shot detector (initialized after calibration)
+        self.shot_detector = None
         
     def _setup_detailed_logging(self):
         """Setup comprehensive debug and main event logging"""
@@ -505,7 +507,6 @@ class LeadVilleBridge:
             await self.amg_client.start_notify(AMG_TIMER_UUID, self.amg_notification_handler)
             self.logger.info("📝 Status: Timer DC:1A - Connected")
             self.logger.info("AMG timer and shot notifications enabled")
-            self.logger.info("AMG timer and shot notifications enabled")
             
         except Exception as e:
             self.logger.error(f"AMG timer connection failed: {e}")
@@ -581,7 +582,7 @@ class LeadVilleBridge:
         self.running = True
         
         # Startup message
-        self.logger.info("🎯 LeadVille Bridge v2.0 - Starting...")
+        self.logger.info("🎯 TinTown Bridge v2.0 - Starting...")
         self.logger.info(f"📋 Complete console log: {console_log_path}")
         self.logger.info("💡 Use 'tail -f' on this log file to see ALL events including AMG beeps")
         
