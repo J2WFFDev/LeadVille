@@ -1,212 +1,221 @@
+#!/usr/bin/env python3
 """
-Development Configuration Module
+TinTown Development Configuration Manager
 
-Centralized configuration system for development and testing parameters.
+Manages development vs production configurations for enhanced logging, 
+timing analysis, and debugging features during the development phase.
 """
 
-import json
+import os
+import yaml
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-
-class DevelopmentConfig:
-    """
-    Centralized configuration for development parameters
-    """
+class DevConfig:
+    """Development configuration manager for TinTown bridge"""
     
-    def __init__(self, config_file: Optional[Path] = None):
-        """
-        Initialize development configuration
+    def __init__(self, config_path: Optional[str] = None):
+        self.config_path = config_path or "config/development.yaml"
+        self.config = self._load_config()
+        self.is_dev_mode = self.config.get('development_mode', False)
         
-        Args:
-            config_file: Path to configuration file
-        """
-        self.config_file = config_file or Path("dev_config.json")
-        
-        # Default configuration
-        self.config = {
-            # Enhanced Impact Detection
-            'enhanced_impact': {
-                'enabled': True,
-                'peak_threshold': 150.0,
-                'onset_threshold': 30.0,
-                'lookback_samples': 10
-            },
-            
-            # Shot Detection
-            'shot_detection': {
-                'threshold': 150.0,
-                'min_duration': 6,
-                'max_duration': 11,
-                'min_interval_seconds': 1.0
-            },
-            
-            # Timing Calibration
-            'timing': {
-                'expected_delay_ms': 526.0,
-                'correlation_window_ms': 2000,
-                'enable_statistical_calibration': True
-            },
-            
-            # Logging
-            'logging': {
-                'console_level': 'INFO',
-                'file_level': 'DEBUG',
-                'enable_raw_data_logging': False
-            },
-            
-            # BLE Configuration
-            'ble': {
-                'connection_timeout_seconds': 10,
-                'auto_reconnect': True,
-                'reset_on_startup': True
-            },
-            
-            # Sensor Configuration
-            'sensor': {
-                'calibration_samples': 100,
-                'calibration_timeout_seconds': 30,
-                'auto_calibrate_on_startup': True
-            }
+        # Apply production overrides if not in development mode
+        if not self.is_dev_mode:
+            self._apply_production_overrides()
+    
+    def _load_config(self) -> Dict[str, Any]:
+        """Load development configuration from YAML file"""
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r') as f:
+                    config = yaml.safe_load(f) or {}
+                logger.info(f"📋 Loaded development config from {self.config_path}")
+                return config
+            else:
+                logger.warning(f"Development config not found: {self.config_path}, using defaults")
+                return self._get_default_config()
+        except Exception as e:
+            logger.error(f"Error loading development config: {e}")
+            return self._get_default_config()
+    
+    def _get_default_config(self) -> Dict[str, Any]:
+        """Get default development configuration"""
+        return {
+            'development_mode': False,
+            'enhanced_logging': {'enabled': False},
+            'analysis_tools': {'enabled': False},
+            'enhanced_impact': {'enabled': True},
+            'timing_calibration': {'enhanced_mode': True}
         }
-        
-        # Load configuration file if it exists
-        self._load_config()
-        
-        # Suppress automatic logging - manual message in main bridge
     
-    def _load_config(self):
-        """Load configuration from file"""
-        try:
-            if self.config_file.exists():
-                with open(self.config_file, 'r') as f:
-                    file_config = json.load(f)
-                    
-                # Merge with defaults (file config takes precedence)
-                self._merge_config(self.config, file_config)
-                
-                logger.info(f"Configuration loaded from {self.config_file}")
-        except Exception as e:
-            logger.warning(f"Could not load config file: {e}")
+    def _apply_production_overrides(self):
+        """Apply production overrides when not in development mode"""
+        overrides = self.config.get('production_overrides', {})
+        for section, settings in overrides.items():
+            if section in self.config:
+                self.config[section].update(settings)
+        logger.info("🏭 Applied production configuration overrides")
     
-    def _merge_config(self, default: Dict, override: Dict):
-        """Recursively merge configuration dictionaries"""
-        for key, value in override.items():
-            if key in default and isinstance(default[key], dict) and isinstance(value, dict):
-                self._merge_config(default[key], value)
-            else:
-                default[key] = value
+    # Enhanced Logging Configuration
+    def is_enhanced_logging_enabled(self) -> bool:
+        return self.config.get('enhanced_logging', {}).get('enabled', False)
     
-    def save_config(self):
-        """Save current configuration to file"""
-        try:
-            with open(self.config_file, 'w') as f:
-                json.dump(self.config, f, indent=2)
-            logger.info(f"Configuration saved to {self.config_file}")
-        except Exception as e:
-            logger.error(f"Could not save config: {e}")
+    def is_sample_logging_enabled(self) -> bool:
+        return self.config.get('enhanced_logging', {}).get('sample_logging', False)
     
-    def get(self, key_path: str, default: Any = None) -> Any:
-        """
-        Get configuration value using dot notation
-        
-        Args:
-            key_path: Dot-separated path (e.g., 'enhanced_impact.peak_threshold')
-            default: Default value if key not found
-            
-        Returns:
-            Configuration value or default
-        """
-        keys = key_path.split('.')
-        value = self.config
-        
-        for key in keys:
-            if isinstance(value, dict) and key in value:
-                value = value[key]
-            else:
-                return default
-        
-        return value
+    def is_impact_analysis_enabled(self) -> bool:
+        return self.config.get('enhanced_logging', {}).get('impact_analysis', False)
     
-    def set(self, key_path: str, value: Any):
-        """
-        Set configuration value using dot notation
-        
-        Args:
-            key_path: Dot-separated path
-            value: Value to set
-        """
-        keys = key_path.split('.')
-        config = self.config
-        
-        # Navigate to parent dictionary
-        for key in keys[:-1]:
-            if key not in config:
-                config[key] = {}
-            config = config[key]
-        
-        # Set final value
-        config[keys[-1]] = value
-        logger.debug(f"Config updated: {key_path} = {value}")
+    def is_timing_correlation_logging_enabled(self) -> bool:
+        return self.config.get('enhanced_logging', {}).get('timing_correlation', False)
     
-    # Enhanced Impact Detection methods
+    def should_log_all_samples(self) -> bool:
+        return self.config.get('enhanced_logging', {}).get('log_all_samples', False)
+    
+    def should_log_impact_samples(self) -> bool:
+        return self.config.get('enhanced_logging', {}).get('log_impact_samples', True)
+    
+    def get_impact_window_samples(self) -> int:
+        return self.config.get('enhanced_logging', {}).get('impact_window_samples', 50)
+    
+    # Debug Levels
+    def get_bridge_debug_level(self) -> str:
+        return self.config.get('enhanced_logging', {}).get('bridge_debug', 'INFO')
+    
+    def get_timing_debug_level(self) -> str:
+        return self.config.get('enhanced_logging', {}).get('timing_debug', 'INFO')
+    
+    def get_impact_debug_level(self) -> str:
+        return self.config.get('enhanced_logging', {}).get('impact_debug', 'INFO')
+    
+    # Analysis Tools Configuration
+    def are_analysis_tools_enabled(self) -> bool:
+        return self.config.get('analysis_tools', {}).get('enabled', False)
+    
+    def is_strip_chart_generator_enabled(self) -> bool:
+        return self.config.get('analysis_tools', {}).get('strip_chart_generator', False)
+    
+    def is_correlation_analyzer_enabled(self) -> bool:
+        return self.config.get('analysis_tools', {}).get('correlation_analyzer', False)
+    
+    def get_export_formats(self) -> list:
+        return self.config.get('analysis_tools', {}).get('export_formats', ['json'])
+    
+    # Enhanced Impact Detection Configuration  
     def is_enhanced_impact_enabled(self) -> bool:
-        return self.get('enhanced_impact.enabled', True)
-    
-    def get_peak_threshold(self) -> float:
-        return self.get('enhanced_impact.peak_threshold', 150.0)
+        return self.config.get('enhanced_impact', {}).get('enabled', True)
     
     def get_onset_threshold(self) -> float:
-        return self.get('enhanced_impact.onset_threshold', 30.0)
+        return self.config.get('enhanced_impact', {}).get('onset_threshold', 30.0)
+    
+    def get_peak_threshold(self) -> float:
+        return self.config.get('enhanced_impact', {}).get('peak_threshold', 150.0)
     
     def get_lookback_samples(self) -> int:
-        return self.get('enhanced_impact.lookback_samples', 10)
+        return self.config.get('enhanced_impact', {}).get('lookback_samples', 10)
     
-    # Shot Detection methods
-    def get_shot_threshold(self) -> float:
-        return self.get('shot_detection.threshold', 150.0)
+    def is_confidence_logging_enabled(self) -> bool:
+        return self.config.get('enhanced_impact', {}).get('confidence_logging', True)
     
-    def get_shot_duration_range(self) -> tuple:
-        min_dur = self.get('shot_detection.min_duration', 6)
-        max_dur = self.get('shot_detection.max_duration', 11)
-        return (min_dur, max_dur)
+    # Timing Calibration Configuration
+    def is_enhanced_timing_enabled(self) -> bool:
+        return self.config.get('timing_calibration', {}).get('enhanced_mode', True)
     
-    def get_shot_interval(self) -> float:
-        return self.get('shot_detection.min_interval_seconds', 1.0)
+    def get_timing_learning_rate(self) -> float:
+        return self.config.get('timing_calibration', {}).get('learning_rate', 0.1)
     
-    # Timing methods
-    def get_expected_delay(self) -> float:
-        return self.get('timing.expected_delay_ms', 526.0)
+    def is_validation_logging_enabled(self) -> bool:
+        return self.config.get('timing_calibration', {}).get('validation_logging', True)
     
-    def get_correlation_window(self) -> float:
-        return self.get('timing.correlation_window_ms', 2000)
+    def is_baseline_analysis_enabled(self) -> bool:
+        return self.config.get('timing_calibration', {}).get('baseline_analysis', True)
     
-    # Sensor methods
-    def get_calibration_samples(self) -> int:
-        return self.get('sensor.calibration_samples', 100)
+    # Performance Monitoring
+    def is_performance_monitoring_enabled(self) -> bool:
+        return self.config.get('performance_monitoring', {}).get('enabled', False)
     
-    def get_calibration_timeout(self) -> int:
-        return self.get('sensor.calibration_timeout_seconds', 30)
+    def is_sample_rate_tracking_enabled(self) -> bool:
+        return self.config.get('performance_monitoring', {}).get('sample_rate_tracking', False)
     
-    def is_auto_calibrate_enabled(self) -> bool:
-        return self.get('sensor.auto_calibrate_on_startup', True)
+    def is_processing_time_tracking_enabled(self) -> bool:
+        return self.config.get('performance_monitoring', {}).get('processing_time_tracking', False)
+    
+    # Development Utilities
+    def is_auto_backup_enabled(self) -> bool:
+        return self.config.get('dev_utilities', {}).get('auto_backup_logs', False)
+    
+    def is_test_mode_markers_enabled(self) -> bool:
+        return self.config.get('dev_utilities', {}).get('test_mode_markers', True)
+    
+    def is_timing_validation_enabled(self) -> bool:
+        return self.config.get('dev_utilities', {}).get('timing_validation', True)
+    
+    def is_data_export_enabled(self) -> bool:
+        return self.config.get('dev_utilities', {}).get('data_export', True)
+    
+    # Configuration Status
+    def get_mode_description(self) -> str:
+        if self.is_dev_mode:
+            return "🔧 Development Mode (Enhanced logging and analysis enabled)"
+        else:
+            return "🏭 Production Mode (Optimized performance)"
     
     def print_config_summary(self):
-        """Print a summary of current configuration"""
-        logger.info("=== DEVELOPMENT CONFIGURATION ===")
-        logger.info(f"Enhanced Impact: {self.is_enhanced_impact_enabled()} "
-                   f"(peak={self.get_peak_threshold()}, onset={self.get_onset_threshold()})")
-        logger.info(f"Shot Detection: threshold={self.get_shot_threshold()}, "
-                   f"duration={self.get_shot_duration_range()}, interval={self.get_shot_interval()}s")
-        logger.info(f"Timing: delay={self.get_expected_delay()}ms, "
-                   f"window={self.get_correlation_window()}ms")
-        logger.info(f"Calibration: {self.get_calibration_samples()} samples, "
-                   f"auto={self.is_auto_calibrate_enabled()}")
-        logger.info("================================")
+        """Print configuration summary for startup logging"""
+        logger.info("="*60)
+        logger.info("🔧 TINTOWN DEVELOPMENT CONFIGURATION")
+        logger.info("="*60)
+        logger.info(f"Mode: {self.get_mode_description()}")
+        logger.info(f"Enhanced Logging: {'✅' if self.is_enhanced_logging_enabled() else '❌'}")
+        logger.info(f"Sample Logging: {'✅' if self.is_sample_logging_enabled() else '❌'}")
+        logger.info(f"Impact Analysis: {'✅' if self.is_impact_analysis_enabled() else '❌'}")
+        logger.info(f"Timing Correlation: {'✅' if self.is_timing_correlation_logging_enabled() else '❌'}")
+        logger.info(f"Analysis Tools: {'✅' if self.are_analysis_tools_enabled() else '❌'}")
+        logger.info(f"Enhanced Impact Detection: {'✅' if self.is_enhanced_impact_enabled() else '❌'}")
+        logger.info(f"Performance Monitoring: {'✅' if self.is_performance_monitoring_enabled() else '❌'}")
+        
+        if self.is_enhanced_impact_enabled():
+            logger.info(f"  Onset Threshold: {self.get_onset_threshold():.1f}g")
+            logger.info(f"  Peak Threshold: {self.get_peak_threshold():.1f}g")
+            logger.info(f"  Lookback Samples: {self.get_lookback_samples()}")
+        
+        logger.info("="*60)
 
+# Global development configuration instance
+dev_config = DevConfig()
 
-# Global configuration instance
-dev_config = DevelopmentConfig()
+# Convenience functions for easy access
+def is_dev_mode() -> bool:
+    return dev_config.is_dev_mode
+
+def is_enhanced_logging_enabled() -> bool:
+    return dev_config.is_enhanced_logging_enabled()
+
+def is_sample_logging_enabled() -> bool:
+    return dev_config.is_sample_logging_enabled()
+
+def is_analysis_tools_enabled() -> bool:
+    return dev_config.are_analysis_tools_enabled()
+
+def get_enhanced_impact_config() -> dict:
+    return {
+        'enabled': dev_config.is_enhanced_impact_enabled(),
+        'onset_threshold': dev_config.get_onset_threshold(),
+        'peak_threshold': dev_config.get_peak_threshold(),
+        'lookback_samples': dev_config.get_lookback_samples()
+    }
+
+if __name__ == "__main__":
+    # Test the configuration system
+    logging.basicConfig(level=logging.INFO)
+    dev_config.print_config_summary()
+    
+    print(f"\nTesting configuration access:")
+    print(f"Development mode: {is_dev_mode()}")
+    print(f"Enhanced logging: {is_enhanced_logging_enabled()}")
+    print(f"Sample logging: {is_sample_logging_enabled()}")
+    print(f"Analysis tools: {is_analysis_tools_enabled()}")
+    print(f"Enhanced impact config: {get_enhanced_impact_config()}")
