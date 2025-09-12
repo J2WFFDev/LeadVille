@@ -112,6 +112,7 @@ class LeadVilleBridge:
         self.impact_counter = 0
         self.shot_counter = 0
         self.current_string_number = 1
+        self.enhanced_impact_counter = 0
         
         # Initialize components if available
         if COMPONENTS_AVAILABLE:
@@ -255,7 +256,7 @@ class LeadVilleBridge:
             await self.bt50_client.stop_notify(BT50_SENSOR_UUID)
             await self.bt50_client.start_notify(BT50_SENSOR_UUID, self.bt50_notification_handler)
             
-            self.logger.info("📝 Status: Sensor ready for impact detection")
+            self.logger.info("📝 Status: Sensor 12:E3 - Listening")
             return True
             
         except Exception as e:
@@ -274,32 +275,61 @@ class LeadVilleBridge:
             
             # Handle START beep (0x0105)
             if frame_header == 0x01 and frame_type == 0x05:
-                self.start_beep_time = time.time()
-                self.logger.info("🎵 AMG Timer: START beep detected")
+                self.start_beep_time = datetime.now()
+                self.logger.info(f"📝 Status: Timer DC:1A - Start Beep at {self.start_beep_time.strftime('%H:%M:%S.%f')[:-3]}")
                 
             # Handle SHOT event (0x0103)
             elif frame_header == 0x01 and frame_type == 0x03 and len(data) >= 14:
-                shot_time = time.time()
+                shot_time = datetime.now()
                 self.shot_counter += 1
                 
-                # Calculate split time
-                if self.start_beep_time:
-                    split_time = shot_time - self.start_beep_time
-                    self.logger.info(f"🎯 Shot #{self.shot_counter}: Split = {split_time:.3f}s")
-                else:
-                    self.logger.info(f"🎯 Shot #{self.shot_counter}: No start beep reference")
+                # Extract timer data
+                time_cs = (data[4] << 8) | data[5]
+                split_cs = (data[6] << 8) | data[7]  
+                first_cs = (data[8] << 8) | data[9]
+                
+                timer_split_seconds = split_cs / 100.0
+                first_seconds = first_cs / 100.0
+                
+                # Calculate split time from previous shot
+                shot_split_seconds = 0.0
+                if hasattr(self, 'previous_shot_time') and self.previous_shot_time:
+                    shot_split_seconds = (shot_time - self.previous_shot_time).total_seconds()
+                
+                self.logger.info(f"🔫 String {self.current_string_number}, Shot #{self.shot_counter} - Time {timer_split_seconds:.2f}s, Split {shot_split_seconds:.2f}s, First {first_seconds:.2f}s")
+                
+                self.previous_shot_time = shot_time
                 
                 # Record shot for timing correlation
                 if self.timing_calibrator:
-                    self.timing_calibrator.record_shot(
-                        datetime.now(timezone.utc),
-                        self.shot_counter,
-                        self.current_string_number
-                    )
+                    self.timing_calibrator.record_shot(shot_time, self.shot_counter, self.current_string_number)
                     
             # Handle STOP beep (0x0108)
             elif frame_header == 0x01 and frame_type == 0x08:
-                self.logger.info("🛑 AMG Timer: STOP beep detected")
+                reception_timestamp = datetime.now()
+                
+                # Extract string data
+                if len(data) >= 14:
+                    string_number = data[13]
+                    time_cs = (data[4] << 8) | data[5]
+                    timer_seconds = time_cs / 100.0
+                else:
+                    string_number = self.current_string_number
+                    timer_seconds = 0
+                    
+                # Calculate total info
+                total_info = ""
+                if self.start_beep_time:
+                    total_ms = (reception_timestamp - self.start_beep_time).total_seconds() * 1000
+                    total_info = f" (total: {timer_seconds:.2f}s)"
+                    
+                self.logger.info(f"� Status: Timer DC:1A - Stop Beep for String #{string_number} at {reception_timestamp.strftime('%H:%M:%S.%f')[:-3]}{total_info}")
+                
+                # Reset for next string  
+                self.start_beep_time = None
+                self.impact_counter = 0
+                self.shot_counter = 0
+                self.previous_shot_time = None
                 
     async def bt50_notification_handler(self, characteristic, data):
         """Handle BT50 sensor notifications with impact detection"""
@@ -318,8 +348,18 @@ class LeadVilleBridge:
                 
                 for shot in detected_shots:
                     self.impact_counter += 1
-                    self.logger.info(f"💥 Impact #{self.impact_counter}: "
-                                   f"Peak={shot.peak_magnitude:.1f}, Duration={shot.duration_samples}")
+                    
+                    # Calculate time from string start
+                    time_from_start = 0.0
+                    if self.start_beep_time:
+                        time_from_start = (shot.timestamp - self.start_beep_time).total_seconds()
+                    
+                    # Calculate time from last shot
+                    time_from_shot = 0.0
+                    if self.previous_shot_time:
+                        time_from_shot = (shot.timestamp - self.previous_shot_time).total_seconds()
+                    
+                    self.logger.info(f"💥 String {self.current_string_number}, Impact #{self.impact_counter} - Time {time_from_start:.2f}s, Shot->Impact {time_from_shot:.3f}s, Peak {shot.peak_magnitude:.0f}g")
                     
                     # Record impact for timing correlation
                     if self.timing_calibrator:
@@ -332,16 +372,27 @@ class LeadVilleBridge:
                 )
                 
                 for impact in enhanced_impacts:
-                    self.logger.info(f"✨ Enhanced Impact: "
-                                   f"Onset={impact.onset_magnitude:.1f}, "
-                                   f"Peak={impact.peak_magnitude:.1f}")
+                    # Calculate time from string start
+                    time_from_start = 0.0
+                    if self.start_beep_time:
+                        time_from_start = (impact.onset_timestamp - self.start_beep_time).total_seconds()
+                    
+                    # Calculate time from last shot
+                    time_from_shot = 0.0
+                    if self.previous_shot_time:
+                        time_from_shot = (impact.onset_timestamp - self.previous_shot_time).total_seconds()
+                    
+                    impact_number = getattr(self, 'enhanced_impact_counter', 0) + 1
+                    setattr(self, 'enhanced_impact_counter', impact_number)
+                    
+                    self.logger.info(f"💥 String {self.current_string_number}, Enhanced Impact #{impact_number} - Time {time_from_start:.2f}s, Shot->Impact {time_from_shot:.3f}s, Peak {impact.peak_magnitude:.0f}g")
                     
         except Exception as e:
             self.logger.error(f"BT50 processing failed: {e}")
             
     async def connect_devices(self):
         """Connect to both AMG timer and BT50 sensor"""
-        self.logger.info("📝 Status: LeadVille Bridge - Initializing")
+        self.logger.info("📝 Status: Bridge MCU1 - Bridge Initialized")
         
         try:
             # Connect AMG Timer
@@ -349,7 +400,7 @@ class LeadVilleBridge:
             self.amg_client = BleakClient(AMG_TIMER_MAC)
             await self.amg_client.connect()
             await self.amg_client.start_notify(AMG_TIMER_UUID, self.amg_notification_handler)
-            self.logger.info("📝 Status: AMG Timer - Connected")
+            self.logger.info("📝 Status: Timer DC:1A - Connected")
             
         except Exception as e:
             self.logger.error(f"AMG timer connection failed: {e}")
@@ -359,14 +410,18 @@ class LeadVilleBridge:
             self.logger.info("Connecting to BT50 sensor...")
             self.bt50_client = BleakClient(BT50_SENSOR_MAC)
             await self.bt50_client.connect()
-            self.logger.info("📝 Status: BT50 Sensor - Connected")
+            self.logger.info("📝 Status: Sensor 12:E3 - Connected")
             
             # Perform calibration
             await asyncio.sleep(1.0)  # Let connection stabilize
             calibration_success = await self.perform_startup_calibration()
             
             if calibration_success:
-                self.logger.info("🎯 LeadVille Bridge - Ready for Operation")
+                # Final ready status - only if both devices connected successfully
+                if (self.amg_client and self.amg_client.is_connected and 
+                    self.bt50_client and self.bt50_client.is_connected and
+                    self.calibration_complete):
+                    self.logger.info("-----------------------------🎯Bridge ready for String🎯-----------------------------")
             else:
                 self.logger.error("❌ Calibration failed - bridge not ready")
                 
@@ -384,15 +439,28 @@ class LeadVilleBridge:
         if self.statistical_calibrator:
             self.statistical_calibrator.save_data()
             
-        # Report statistics
+        # Log shot detection statistics
         if self.shot_detector:
             stats = self.shot_detector.get_stats()
-            self.logger.info(f"Shot detection: {stats['total_shots']} shots, {stats['total_samples']} samples")
+            self.logger.info(f"Shot detection summary: {stats['total_shots']} shots detected "
+                           f"from {stats['total_samples']} samples ({stats.get('shots_per_minute', 0):.1f}/min)")
+        else:
+            self.logger.info("Shot detector not initialized - no statistics available")
             
+        # Report timing correlation statistics
         if self.timing_calibrator:
             timing_stats = self.timing_calibrator.get_correlation_stats()
-            self.logger.info(f"Timing correlation: {timing_stats['total_pairs']} pairs, "
-                           f"{timing_stats['success_rate']*100:.1f}% success rate")
+            self.logger.info("=== TIMING CORRELATION STATISTICS ===")
+            self.logger.info(f"Total correlated pairs: {timing_stats['total_pairs']}")
+            self.logger.info(f"Correlation success rate: {timing_stats['success_rate']*100:.1f}%")
+            self.logger.info(f"Average timing delay: {timing_stats['avg_delay_ms']}ms")
+            self.logger.info(f"Expected timing delay: {timing_stats['expected_delay_ms']}ms")
+            self.logger.info(f"Calibration status: {timing_stats['calibration_status']}")
+            if timing_stats['pending_shots'] > 0 or timing_stats['pending_impacts'] > 0:
+                self.logger.info(f"Pending events: {timing_stats['pending_shots']} shots, {timing_stats['pending_impacts']} impacts")
+            self.logger.info("=====================================")
+        else:
+            self.logger.info("Timing calibrator not initialized - no correlation statistics")
             
         # Disconnect devices
         if self.amg_client and self.amg_client.is_connected:
@@ -408,18 +476,20 @@ class LeadVilleBridge:
         self.running = True
         
         # Startup message
-        self.logger.info("🎯 LeadVille Impact Bridge v2.0 - Starting...")
-        self.logger.info(f"📋 Console log: {console_log_path}")
+        self.logger.info("🎯 LeadVille Bridge v2.0 - Starting...")
+        self.logger.info(f"📋 Complete console log: {console_log_path}")
+        self.logger.info("💡 Use 'tail -f' on this log file to see ALL events including AMG beeps")
         
         try:
             await self.connect_devices()
             
             if COMPONENTS_AVAILABLE and self.calibration_complete:
-                print("\n=== LEADVILLE IMPACT BRIDGE ===")
-                print("✨ Production-ready BLE impact detection system")
-                print(f"🎯 Calibrated baseline: X={self.baseline_x}, Y={self.baseline_y}, Z={self.baseline_z}")
-                print(f"⚡ Detection threshold: {DEFAULT_IMPACT_THRESHOLD} counts")
-                print("🔄 Real-time shot-impact correlation enabled")
+                print("\n=== AUTOMATIC CALIBRATION BRIDGE WITH SHOT DETECTION ===")
+                print("✨ Dynamic baseline calibration - establishes fresh zero on every startup")
+                print("🎯 Shot Detection: 150 count threshold, 6-11 sample duration, 1s interval")
+                print(f"📊 Current baseline: X={self.baseline_x}, Y={self.baseline_y}, Z={self.baseline_z} (auto-calibrated)")
+                print(f"⚡ Impact threshold: {DEFAULT_IMPACT_THRESHOLD} counts from dynamic baseline")
+                print("🔄 Baseline automatically corrects for any sensor orientation")
                 print("Press CTRL+C to stop\n")
             
             # Main operation loop
