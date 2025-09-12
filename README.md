@@ -1,17 +1,27 @@
 # LeadVille Impact Bridge
 
-A production-ready Bluetooth Low Energy (BLE) based impact sensor system for shooting sports applications. The LeadVille Bridge provides real-time shot detection, impact correlation, and comprehensive data logging through integration with AMG timers and BT50 acceleration sensors.
+A production-ready Bluetooth Low Energy (BLE) based impact sensor system for shooting sports applications. LeadVille integrates the proven TinTown codebase with clean project structure, providing real-time shot detection, impact correlation, and comprehensive data logging through integration with AMG timers and BT50 acceleration sensors.
+
+## Version 3.0.0 - TinTown Integration Complete ✅
+
+**MAJOR MILESTONE**: Successfully integrated the entire working TinTown codebase into LeadVille's organized structure. This version brings over all proven functionality including corrected BT50 parsing, working impact detection, and complete timing calibration systems. **Status: WORKING** - Tested and running successfully on Raspberry Pi.
 
 ## Features
 
-- 🎯 **Real-time Impact Detection**: Advanced algorithms for precise shot and impact detection
-- 📡 **BLE Integration**: Seamless connection with AMG timers and BT50 sensors
-- ⏱️ **Timing Correlation**: Automatic correlation between timer shots and sensor impacts
-- 📊 **Statistical Calibration**: Self-learning timing calibration with statistical analysis
-- 🔧 **Auto-Calibration**: Dynamic baseline establishment on startup
-- 📝 **Comprehensive Logging**: Multi-level logging with console and file output
-- ⚙️ **Configurable Parameters**: JSON-based configuration system
-- 🧪 **Enhanced Detection**: Onset timing detection with dual-threshold analysis
+### Core TinTown Integration ✅
+- 🎯 **Proven Impact Detection**: Integrated TinTown's working shot detection algorithms
+- 📡 **Complete BLE Stack**: Full TinTown BLE implementation (AMG timers + BT50 sensors)
+- ⚙️ **Corrected BT50 Parser**: Fixed scale factors and proper sensor data processing
+- 📊 **Statistical Timing**: Advanced timing calibration with uncertainty analysis
+- 🔧 **Auto-Calibration**: Dynamic baseline establishment with outlier filtering
+- 🧪 **Enhanced Detection**: Dual-threshold onset detection system
+
+### System Integration
+- 📝 **TinTown Console Format**: Exact console output matching original TinTown
+- ⏱️ **Timing Correlation**: Automatic shot-to-impact correlation system  
+- 🔄 **Service Integration**: Systemd service for auto-startup on Pi
+- 📋 **Multi-Config Support**: JSON, YAML, and development configuration files
+- 🎛️ **Development Mode**: Enhanced logging and analysis capabilities
 
 ## System Requirements
 
