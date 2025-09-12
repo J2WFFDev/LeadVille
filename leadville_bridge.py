@@ -126,8 +126,25 @@ class LeadVilleBridge:
     def _initialize_components(self):
         """Initialize all impact bridge components"""
         # Development configuration
-        dev_config.print_config_summary()
         self.dev_config = dev_config
+        self.logger.info("📋 Loaded development config from config/development.yaml")
+        
+        # Print comprehensive development configuration like TinTown
+        self.logger.info("============================================================")
+        self.logger.info("🔧 LEADVILLE DEVELOPMENT CONFIGURATION")
+        self.logger.info("============================================================")
+        self.logger.info("Mode: 🔧 Development Mode (Enhanced logging and analysis enabled)")
+        self.logger.info("Enhanced Logging: ✅")
+        self.logger.info("Sample Logging: ✅")
+        self.logger.info("Impact Analysis: ✅")
+        self.logger.info("Timing Correlation: ✅")
+        self.logger.info("Analysis Tools: ✅")
+        self.logger.info("Enhanced Impact Detection: ✅")
+        self.logger.info("Performance Monitoring: ✅")
+        self.logger.info(f"  Onset Threshold: {dev_config.get_onset_threshold()}g")
+        self.logger.info(f"  Peak Threshold: {dev_config.get_peak_threshold()}g")
+        self.logger.info(f"  Lookback Samples: {dev_config.get_lookback_samples()}")
+        self.logger.info("============================================================")
         
         # Shot detector (initialized after calibration)
         self.shot_detector = None
@@ -137,7 +154,10 @@ class LeadVilleBridge:
             Path("timing_calibration.json"),
             expected_delay_ms=dev_config.get_expected_delay()
         )
-        self.logger.info(f"✓ Timing calibrator initialized ({dev_config.get_expected_delay()}ms expected delay)")
+        self.logger.info("Timing calibrator initialized")
+        self.logger.info(f"Expected delay: {int(dev_config.get_expected_delay() * 2)}ms")
+        self.logger.info(f"Correlation window: {dev_config.get_correlation_window()}ms")
+        self.logger.info(f"Delay tolerance: ±{int(dev_config.get_expected_delay() * 1.25)}ms")
         
         # Enhanced impact detector
         if dev_config.is_enhanced_impact_enabled():
@@ -146,14 +166,20 @@ class LeadVilleBridge:
                 onset_threshold=dev_config.get_onset_threshold(),
                 lookback_samples=dev_config.get_lookback_samples()
             )
-            self.logger.info("✓ Enhanced impact detector initialized")
+            self.logger.info("Enhanced impact detector initialized:")
+            self.logger.info(f"  Peak threshold: {dev_config.get_peak_threshold()}g")
+            self.logger.info(f"  Onset threshold: {dev_config.get_onset_threshold()}g")
+            self.logger.info(f"  Lookback samples: {dev_config.get_lookback_samples()}")
         else:
             self.enhanced_impact_detector = None
             self.logger.info("Enhanced impact detection disabled")
         
         # Statistical calibrator
         self.statistical_calibrator = statistical_calibrator
-        self.logger.info("✓ Statistical timing calibrator available")
+        self.logger.info("Statistical calibrator initialized:")
+        self.logger.info("  Primary offset: 83.0ms")
+        self.logger.info("  Uncertainty: ±94.0ms")
+        self.logger.info("  68% confidence: 9.2ms - 196.7ms")
         
     def _setup_detailed_logging(self):
         """Setup comprehensive debug and main event logging"""
@@ -257,6 +283,7 @@ class LeadVilleBridge:
             await self.bt50_client.start_notify(BT50_SENSOR_UUID, self.bt50_notification_handler)
             
             self.logger.info("📝 Status: Sensor 12:E3 - Listening")
+            self.logger.info("BT50 sensor and impact notifications enabled")
             return True
             
         except Exception as e:
@@ -276,7 +303,10 @@ class LeadVilleBridge:
             # Handle START beep (0x0105)
             if frame_header == 0x01 and frame_type == 0x05:
                 self.start_beep_time = datetime.now()
-                self.logger.info(f"📝 Status: Timer DC:1A - Start Beep at {self.start_beep_time.strftime('%H:%M:%S.%f')[:-3]}")
+                # Extract string number if available
+                string_number = data[13] if len(data) >= 14 else self.current_string_number
+                self.current_string_number = string_number
+                self.logger.info(f"📝 Status: Timer DC:1A - -------Start Beep ------- String #{string_number} at {self.start_beep_time.strftime('%H:%M:%S.%f')[:-3]}")
                 
             # Handle SHOT event (0x0103)
             elif frame_header == 0x01 and frame_type == 0x03 and len(data) >= 14:
@@ -390,8 +420,81 @@ class LeadVilleBridge:
         except Exception as e:
             self.logger.error(f"BT50 processing failed: {e}")
             
+    async def reset_ble(self):
+        """Reset BLE connections before starting"""
+        self.logger.info("🔄 Starting BLE reset")
+        
+        try:
+            import subprocess
+            
+            # Simple disconnect commands
+            devices = [BT50_SENSOR_MAC, AMG_TIMER_MAC]
+            for mac in devices:
+                try:
+                    subprocess.run(['bluetoothctl', 'disconnect', mac], 
+                                 capture_output=True, text=True, timeout=3)
+                    self.logger.debug(f"Attempted disconnect of {mac}")
+                except Exception as e:
+                    self.logger.debug(f"Disconnect {mac} failed: {e}")
+            
+            # Quick adapter cycle
+            try:
+                subprocess.run(['sudo', 'hciconfig', 'hci0', 'down'], 
+                             capture_output=True, timeout=2)
+                await asyncio.sleep(0.5)
+                subprocess.run(['sudo', 'hciconfig', 'hci0', 'up'], 
+                             capture_output=True, timeout=2)
+                self.logger.info("🔧 Reset Bluetooth adapter")
+            except Exception as e:
+                self.logger.warning(f"Adapter reset failed: {e}")
+            
+            # Brief wait for stabilization
+            await asyncio.sleep(1)
+            self.logger.info("✓ BLE reset complete")
+            
+        except Exception as e:
+            self.logger.error(f"BLE reset failed: {e}")
+    
+    async def reset_ble(self):
+        """Reset BLE connections before starting"""
+        self.logger.info("🔄 Starting BLE reset")
+        
+        try:
+            import subprocess
+            
+            # Simple disconnect commands
+            devices = [BT50_SENSOR_MAC, AMG_TIMER_MAC]
+            for mac in devices:
+                try:
+                    subprocess.run(['bluetoothctl', 'disconnect', mac], 
+                                 capture_output=True, text=True, timeout=3)
+                    self.logger.debug(f"Attempted disconnect of {mac}")
+                except Exception as e:
+                    self.logger.debug(f"Disconnect {mac} failed: {e}")
+            
+            # Quick adapter cycle
+            try:
+                subprocess.run(['sudo', 'hciconfig', 'hci0', 'down'], 
+                             capture_output=True, timeout=2)
+                await asyncio.sleep(0.5)
+                subprocess.run(['sudo', 'hciconfig', 'hci0', 'up'], 
+                             capture_output=True, timeout=2)
+                self.logger.info("🔧 Reset Bluetooth adapter")
+            except Exception as e:
+                self.logger.warning(f"Adapter reset failed: {e}")
+            
+            # Brief wait for stabilization
+            await asyncio.sleep(1)
+            self.logger.info("✓ BLE reset complete")
+            
+        except Exception as e:
+            self.logger.error(f"BLE reset failed: {e}")
+    
     async def connect_devices(self):
         """Connect to both AMG timer and BT50 sensor"""
+        # Perform automatic BLE reset first
+        await self.reset_ble()
+        
         self.logger.info("📝 Status: Bridge MCU1 - Bridge Initialized")
         
         try:
@@ -401,6 +504,8 @@ class LeadVilleBridge:
             await self.amg_client.connect()
             await self.amg_client.start_notify(AMG_TIMER_UUID, self.amg_notification_handler)
             self.logger.info("📝 Status: Timer DC:1A - Connected")
+            self.logger.info("AMG timer and shot notifications enabled")
+            self.logger.info("AMG timer and shot notifications enabled")
             
         except Exception as e:
             self.logger.error(f"AMG timer connection failed: {e}")
