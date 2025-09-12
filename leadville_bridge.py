@@ -2,7 +2,7 @@
 """
 LeadVille Impact Bridge - Production BLE-based Impact Sensor System
 
-A clean, production-ready implementation of the BT50 sensor bridge with AMG timer integration.
+A clean, production-ready implementation of the BT50 sensor bridge with AM            # Enhanced impact detector initialized silently (manual message below) timer integration.
 Provides real-time shot detection, impact correlation, and comprehensive logging.
 """
 

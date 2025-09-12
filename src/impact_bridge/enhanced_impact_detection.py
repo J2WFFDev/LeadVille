@@ -53,9 +53,7 @@ class EnhancedImpactDetector:
         self.total_impacts = 0
         self.total_samples_processed = 0
         
-        logger.info(f"Enhanced impact detector initialized: "
-                   f"threshold={threshold}, onset={onset_threshold}, "
-                   f"lookback={lookback_samples}")
+        # Suppress automatic logging - manual message in main bridge
     
     def process_samples(self, samples: List[Dict], baseline_x: int = 0) -> List[ImpactEvent]:
         """

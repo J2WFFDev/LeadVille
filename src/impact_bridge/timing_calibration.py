@@ -56,7 +56,7 @@ class RealTimeTimingCalibrator:
         # Load existing calibration
         self._load_calibration()
         
-        logger.info(f"Timing calibrator initialized: expected_delay={expected_delay_ms}ms")
+        # Suppress automatic logging - manual message in main bridge
     
     def record_shot(self, timestamp: datetime, shot_number: int, string_number: int):
         """Record a shot event for correlation"""

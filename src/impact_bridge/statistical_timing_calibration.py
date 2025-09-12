@@ -40,7 +40,7 @@ class StatisticalTimingCalibrator:
         # Load existing data
         self._load_data()
         
-        logger.info(f"Statistical timing calibrator initialized")
+        # Suppress automatic logging - manual message in main bridge
     
     def add_timing_sample(self, delay_ms: float, confidence: float = 1.0):
         """
