@@ -48,15 +48,32 @@
       "dhcp_range": "192.168.4.10,192.168.4.200"
     }
   },
-  "amg_timer": {
-    "device_id": "60:09:C3:1F:DC:1A",
-    "uuid": "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
-    "frame_validation": true,
-    "simulation_mode": false,
-    "health_monitoring": {
-      "enabled": true,
-      "rssi_check_interval_sec": 30.0,
-      "health_report_interval_sec": 60.0
+  "timer": {
+    "vendor": "amg_labs",
+    "amg_labs": {
+      "device_id": "60:09:C3:1F:DC:1A",
+      "uuid": "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
+      "frame_validation": true,
+      "simulation_mode": false,
+      "health_monitoring": {
+        "enabled": true,
+        "rssi_check_interval_sec": 30.0,
+        "health_report_interval_sec": 60.0
+      },
+      "time_synchronization": {
+        "enabled": true,
+        "sync_interval_minutes": 5,
+        "drift_threshold_ms": 100
+      }
+    },
+    "specialpie": {
+      "device_id": "SP:00:00:00:00:00",
+      "protocol_version": "1.0",
+      "connection_timeout": 10.0,
+      "advanced_features": {
+        "multi_stage_timing": true,
+        "statistics_collection": true
+      }
     },
     "time_synchronization": {
       "enabled": true,
