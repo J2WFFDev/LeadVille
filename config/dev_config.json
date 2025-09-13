@@ -31,6 +31,23 @@
     "calibration_timeout_seconds": 30,
     "auto_calibrate_on_startup": true
   },
+  "networking": {
+    "enabled": true,
+    "default_mode": "ap",
+    "web_server_port": 5000,
+    "captive_portal_port": 8080,
+    "monitoring": {
+      "check_interval_seconds": 30,
+      "failure_threshold": 3,
+      "auto_fallback": true
+    },
+    "ap_mode": {
+      "ssid": "LeadVille-Bridge",
+      "password": "leadville2024",
+      "ip_address": "192.168.4.1",
+      "dhcp_range": "192.168.4.10,192.168.4.200"
+    }
+  },
   "amg_timer": {
     "device_id": "60:09:C3:1F:DC:1A",
     "uuid": "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
