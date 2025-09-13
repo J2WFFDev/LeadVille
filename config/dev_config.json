@@ -61,7 +61,19 @@
     "time_synchronization": {
       "enabled": true,
       "sync_interval_minutes": 5,
-      "drift_threshold_ms": 100
+      "drift_threshold_ms": 20,
+      "enable_correction": true,
+      "ntp": {
+        "enabled": true,
+        "servers": [
+          "pool.ntp.org",
+          "time.nist.gov", 
+          "time.google.com",
+          "time.cloudflare.com"
+        ],
+        "timeout_seconds": 10,
+        "max_retries": 3
+      }
     }
   },
   "mqtt": {

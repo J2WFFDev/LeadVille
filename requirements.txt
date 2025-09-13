@@ -5,6 +5,9 @@
 bleak>=0.20.0              # Bluetooth Low Energy library for Python
 asyncio>=3.4.3             # Asynchronous I/O support
 
+# Time synchronization
+ntplib>=0.4.0              # NTP client for time synchronization
+
 # Data processing and analysis
 numpy>=1.21.0              # Numerical computing library
 scipy>=1.7.0               # Scientific computing library
