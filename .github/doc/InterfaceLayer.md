@@ -1,4 +1,18 @@
-Nice! You’ve got a solid nucleus: one sensor + one timer + a Pi “bridge.” Let’s turn that into a crisp prompt you can drop into an AI dev tool to generate a working Raspberry Pi app—plus a recommended stack and DB choice that fit your offline/online, AP-mode, and role-based UI needs.
+Nice! YoYoYou are You are building an embedded-friendly web application for a Raspberry Pi 4/5 ("Bridge Host") that coordinates multiple WTVB01-BT50 impact sensors and an AMG Labs Commander shot timer for a shooting match. The system must run **offline** (Pi as access point + captive portal) and **online** (Pi joins Wi-Fi). Optimize for reliability, low-latency telemetry, and simple ops in the field.
+
+*Note: Current implementation uses WTVB01-BT50 sensors (WitMotion BLE accelerometers) and AMG Labs Commander timer. Future versions may support custom ESP32-based sensors and alternative timer vendors (SpecialPie, etc.).*uilding an embedded-friendly web application for a Raspberry Pi 4/5 ("Bridge Host") that coordinates multi## BLE & timing
+
+* On session start, sensors and timer receive a time sync (document endpoint/characteristic); resync every N minutes or on drift>±20 ms.
+* All events stored with monotonic time and UTC ISO8601.
+* Include a "drift monitor" and expose drift in UI.
+* **AMG Labs Commander**: Frame-based BLE protocol (UUID: 6e400003-b5a3-f393-e0a9-e50e24dcca9e), 14-byte frames with START(0x0105)/SHOT(0x0103)/STOP(0x0108) event types.
+* **Alternative timers**: Pluggable driver architecture for SpecialPie and other vendor protocols, common event interface for START/SHOT/STOP events.
+* **WTVB01-BT50 specifics**: WitMotion 5561 protocol, ~100Hz sampling, requires calibration for baseline establishment, 1mg scale factor for acceleration data.
+* **Future ESP32 sensors**: Programmable sampling rates, configurable thresholds, enhanced battery reporting, custom BLE characteristics.TVB01-BT50 impact sensors and a shot timer for a shooting match. The system must run **offline** (Pi as access point + captive portal) and **online** (Pi joins Wi-Fi). Optimize for reliability, low-latency telemetry, and simple ops in the field.
+
+*Note: Current implementation uses WTVB01-BT50 sensors (WitMotion BLE accelerometers). Future versions may migrate to custom ESP32-based sensors for enhanced capabilities.* are building an embedded-friendly web application for a Raspberry Pi 4/5 ("Bridge Host") that coordinates multiple WTVB01-BT50 impact sensors and a shot timer for a shooting match. The system must run **offline** (Pi as access point + captive portal) and **online** (Pi joins Wi-Fi). Optimize for reliability, low-latency telemetry, and simple ops in the field.
+
+*Note: Current implementation uses WTVB01-BT50 sensors (WitMotion BLE accelerometers). Future versions may migrate to custom ESP32-based sensors for enhanced capabilities.*’ve got a solid nucleus: one sensor + one timer + a Pi “bridge.” Let’s turn that into a crisp prompt you can drop into an AI dev tool to generate a working Raspberry Pi app—plus a recommended stack and DB choice that fit your offline/online, AP-mode, and role-based UI needs.
 
 # Copy-paste “build prompt”
 
@@ -13,8 +27,11 @@ You are building an embedded-friendly web application for a Raspberry Pi 4/5 (�
 * **Hardware**
 
   * Raspberry Pi (Debian/Raspberry Pi OS), BLE + Wi-Fi.
-  * ESP32 sensors (BLE); shot timer (BLE or serial).
+  * **Impact Sensors**: WTVB01-BT50 (WitMotion BLE accelerometers, ~100Hz sampling, 1mg resolution).
+  * **Shot Timer**: AMG Labs Commander (BLE, START/SHOT/STOP events, frame-based protocol).
   * HDMI-attached screen (optional) for on-device status.
+  * *Future sensors*: Custom ESP32 modules with programmable thresholds and enhanced battery reporting.
+  * *Future timers*: Support for SpecialPie timers and other vendor protocols via pluggable timer drivers.
 * **Networking modes**
 
   1. **Online**: Pi joins venue Wi-Fi as client.
@@ -33,7 +50,7 @@ You are building an embedded-friendly web application for a Raspberry Pi 4/5 (�
    * Setup/update Bridge node name, firmware/app versions, timezone.
    * Network setup: choose Online vs Offline (create SSID/password), show IPs, interface status.
    * Sensor management: scan/paired devices, assign sensors to **Targets** (plates) within **Stages**; set sampling rate, thresholds, calibration, and health checks (battery/RSSI).
-   * Timer management: pair timer, verify clock sync, test event ingestion.
+   * Timer management: pair AMG Labs Commander or SpecialPie timers, select protocol driver, verify clock sync, test event ingestion (START/SHOT/STOP frames).
    * Match metadata: match name, stages, squads, shooters, RO assignments.
    * System monitor: CPU/temp/disk, service health, BLE link quality.
    * **On-boot static info screen** (no login prompt): big-font panel showing Node Name, network mode, SSID/IP, service status, and a live console tail.
@@ -137,7 +154,7 @@ You are building an embedded-friendly web application for a Raspberry Pi 4/5 (�
 
 ## Testing & ops
 
-* Seed script creates a demo match with fake sensors; simulation mode to generate impacts.
+* Seed script creates a demo match with fake WTVB01-BT50 sensors and AMG Commander timer; simulation mode generates realistic impact patterns and timer event sequences.
 * Headless e2e tests (Playwright) and unit tests (pytest).
 * systemd unit files + install script: `install_pi.sh` provisions packages, enables services, configures AP.
 
@@ -148,7 +165,7 @@ You are building an embedded-friendly web application for a Raspberry Pi 4/5 (�
 * Data schema doc + API OpenAPI spec.
 * One-click build: `./install_pi.sh` on fresh Raspberry Pi OS.
 
-Acceptance criteria: app boots to status screen; can switch online/offline; can pair fake sensors in sim mode; live RO dashboard shows events; Scorekeeper exports CSV; logs tail works; role-based login enforced.
+Acceptance criteria: app boots to status screen; can switch online/offline; can pair fake WTVB01-BT50 sensors and AMG Commander timer in sim mode; live RO dashboard shows timer events and sensor impacts; Scorekeeper exports CSV; logs tail works; role-based login enforced.
 
 ---
 
