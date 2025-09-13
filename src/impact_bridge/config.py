@@ -45,6 +45,13 @@ class DatabaseConfig:
     dir: str = "./db"
     file: str = "bridge.db"
     enable_ingest: bool = True
+    # SQLAlchemy specific configurations
+    echo_sql: bool = False
+    pool_size: int = 5
+    max_overflow: int = 10
+    pool_timeout: int = 30
+    pool_recycle: int = 3600
+    wal_mode: bool = True
 
 
 @dataclass
