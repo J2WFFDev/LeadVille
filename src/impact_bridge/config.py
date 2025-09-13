@@ -55,6 +55,23 @@ class DatabaseConfig:
 
 
 @dataclass
+class MqttConfig:
+    """Configuration for MQTT internal message bus."""
+    
+    enabled: bool = True
+    broker_host: str = "localhost"
+    broker_port: int = 1883
+    username: Optional[str] = None
+    password: Optional[str] = None
+    client_id: Optional[str] = None
+    keepalive: int = 60
+    retry_interval: float = 5.0
+    max_retry_interval: float = 60.0
+    qos: int = 1
+    retain_status: bool = True
+
+
+@dataclass
 class AmgConfig:
     """Configuration for AMG Commander BLE connection."""
     
@@ -102,6 +119,7 @@ class AppConfig:
     detector: DetectorConfig = None
     logging: LoggingConfig = None
     database: DatabaseConfig = None
+    mqtt: MqttConfig = None
     
     def __post_init__(self) -> None:
         if self.sensors is None:
@@ -112,6 +130,8 @@ class AppConfig:
             self.logging = LoggingConfig()
         if self.database is None:
             self.database = DatabaseConfig()
+        if self.mqtt is None:
+            self.mqtt = MqttConfig()
 
 
 def load_config(config_path: str) -> AppConfig:
@@ -159,6 +179,10 @@ def load_config(config_path: str) -> AppConfig:
     # Database configuration
     if "database" in raw_config:
         config.database = DatabaseConfig(**raw_config["database"])
+    
+    # MQTT configuration
+    if "mqtt" in raw_config:
+        config.mqtt = MqttConfig(**raw_config["mqtt"])
     
     return config
 

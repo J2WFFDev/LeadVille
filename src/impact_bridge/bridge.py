@@ -12,6 +12,7 @@ from .ble.witmotion_bt50 import Bt50Client, Bt50Sample
 from .config import AppConfig
 from .detector import DetectorParams, HitDetector, MultiPlateDetector
 from .logs import DualNdjsonLogger, NdjsonLogger
+from .mqtt import MqttClient
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,19 @@ class Bridge:
         self.logger.mode = config.logging.mode
         if config.logging.verbose_whitelist:
             self.logger.verbose_whitelist.update(config.logging.verbose_whitelist)
+        
+        # Initialize MQTT client
+        self.mqtt_client = MqttClient(
+            broker_host=config.mqtt.broker_host,
+            broker_port=config.mqtt.broker_port,
+            username=config.mqtt.username,
+            password=config.mqtt.password,
+            client_id=config.mqtt.client_id,
+            keepalive=config.mqtt.keepalive,
+            retry_interval=config.mqtt.retry_interval,
+            max_retry_interval=config.mqtt.max_retry_interval,
+            enabled=config.mqtt.enabled,
+        )
         
         # Timing state
         self.t0_ns: Optional[int] = None
@@ -69,6 +83,9 @@ class Bridge:
         """Start the bridge system."""
         self._stop_requested = False
         
+        # Start MQTT client first
+        await self.mqtt_client.start()
+        
         self.logger.status("Bridge starting", {
             "amg_configured": self.config.amg is not None,
             "sensor_count": len(self.config.sensors),
@@ -77,6 +94,7 @@ class Bridge:
                 "trigger_low": self.config.detector.trigger_low,
                 "dead_time_ms": self.config.detector.dead_time_ms,
             },
+            "mqtt_enabled": self.config.mqtt.enabled,
         })
         
         # Start AMG Commander if configured
@@ -93,6 +111,13 @@ class Bridge:
         status_task = asyncio.create_task(self._status_loop())
         self._tasks.append(status_task)
         
+        # Publish initial bridge status via MQTT
+        await self.mqtt_client.publish_status("bridge", {
+            "started": True,
+            "active_tasks": len(self._tasks),
+            "mqtt_enabled": self.config.mqtt.enabled,
+        })
+        
         self.logger.status("Bridge started", {"active_tasks": len(self._tasks)})
     
     async def stop(self) -> None:
@@ -100,6 +125,12 @@ class Bridge:
         self._stop_requested = True
         
         self.logger.status("Bridge stopping")
+        
+        # Publish shutdown status via MQTT
+        await self.mqtt_client.publish_status("bridge", {
+            "stopping": True,
+            "reason": "shutdown_requested",
+        })
         
         # Stop all clients
         if self.amg_client:
@@ -115,6 +146,11 @@ class Bridge:
         # Wait for tasks to complete
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
+        
+        self._tasks.clear()
+        
+        # Stop MQTT client last
+        await self.mqtt_client.stop()
         
         self.logger.status("Bridge stopped")
         self.logger.close()
@@ -223,21 +259,30 @@ class Bridge:
                 "bt50_connected": sum(1 for c in self.bt50_clients if c.is_connected),
                 "bt50_total": len(self.config.sensors),
                 "detector_status": self.detector.get_all_status(),
+                "mqtt_stats": self.mqtt_client.stats,
             }
             
+            # Log locally
             self.logger.status("Bridge status", status_data)
+            
+            # Publish via MQTT
+            await self.mqtt_client.publish_status("bridge", status_data)
     
     def _on_t0(self, timestamp_ns: int) -> None:
         """Handle T0 signal from AMG Commander."""
         self.t0_ns = timestamp_ns
         self._last_amg_ns = timestamp_ns
         
-        self.logger.event("T0", t_rel_ms=0.0, data={
+        event_data = {
             "source": "AMG_Commander",
             "timestamp_ns": timestamp_ns,
-        })
+        }
         
+        self.logger.event("T0", t_rel_ms=0.0, data=event_data)
         self.logger.status("T0 received", {"timestamp_ns": timestamp_ns})
+        
+        # Publish T0 event via MQTT
+        asyncio.create_task(self.mqtt_client.publish_event("T0", event_data))
     
     def _on_amg_notification(self, data: bytes) -> None:
         """Handle raw AMG notifications for debugging."""
@@ -248,13 +293,25 @@ class Bridge:
     
     def _on_amg_connect(self) -> None:
         """Handle AMG connection."""
-        self.logger.status("AMG connected", {
+        status_data = {
             "mac": self.config.amg.mac if self.config.amg else "unknown",
-        })
+        }
+        self.logger.status("AMG connected", status_data)
+        
+        # Publish timer status via MQTT
+        asyncio.create_task(self.mqtt_client.publish_status("timer", {
+            "connected": True,
+            **status_data,
+        }))
     
     def _on_amg_disconnect(self) -> None:
         """Handle AMG disconnection."""
         self.logger.status("AMG disconnected")
+        
+        # Publish timer status via MQTT
+        asyncio.create_task(self.mqtt_client.publish_status("timer", {
+            "connected": False,
+        }))
     
     def _on_bt50_sample(self, sample: Bt50Sample, sensor_id: str, plate_id: str) -> None:
         """Handle BT50 sensor sample."""
@@ -275,12 +332,25 @@ class Bridge:
             if self.t0_ns:
                 t_rel_ms = (hit_event.timestamp_ns - self.t0_ns) / 1_000_000
             
+            impact_data = {
+                "sensor_id": sensor_id,
+                "plate_id": plate_id,
+                "peak_amplitude": hit_event.peak_amplitude,
+                "duration_ms": hit_event.duration_ms,
+                "rms_amplitude": hit_event.rms_amplitude,
+                "timestamp_ns": hit_event.timestamp_ns,
+                "t_rel_ms": t_rel_ms,
+            }
+            
             self.logger.event("HIT", plate=plate_id, t_rel_ms=t_rel_ms, data={
                 "sensor_id": sensor_id,
                 "peak_amplitude": hit_event.peak_amplitude,
                 "duration_ms": hit_event.duration_ms,
                 "rms_amplitude": hit_event.rms_amplitude,
             })
+            
+            # Publish impact event via MQTT
+            asyncio.create_task(self.mqtt_client.publish_event("HIT", impact_data, sensor_id=sensor_id))
     
     def _process_bt50_buffer(self, sensor_id: str, plate_id: str) -> None:
         """Process accumulated BT50 samples for analysis."""
@@ -306,10 +376,22 @@ class Bridge:
     def _on_bt50_connect(self, sensor_id: str) -> None:
         """Handle BT50 connection."""
         self.logger.status("BT50 connected", {"sensor_id": sensor_id})
+        
+        # Publish sensor status via MQTT
+        asyncio.create_task(self.mqtt_client.publish_status("sensor", {
+            "sensor_id": sensor_id,
+            "connected": True,
+        }))
     
     def _on_bt50_disconnect(self, sensor_id: str) -> None:
         """Handle BT50 disconnection."""
         self.logger.status("BT50 disconnected", {"sensor_id": sensor_id})
+        
+        # Publish sensor status via MQTT
+        asyncio.create_task(self.mqtt_client.publish_status("sensor", {
+            "sensor_id": sensor_id,
+            "connected": False,
+        }))
 
 
 async def run_bridge(config_path: str) -> None:
