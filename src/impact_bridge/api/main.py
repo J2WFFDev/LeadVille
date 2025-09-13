@@ -54,6 +54,12 @@ def create_app() -> FastAPI:
     app.include_router(metrics_router, prefix=f"/{api_config.api_version}", tags=["Metrics"])
     app.include_router(devices_router, prefix=f"/{api_config.api_version}/admin/devices", tags=["Device Management"])
     
+    # Include new view routers
+    from .spectator import router as spectator_router
+    from .coach import router as coach_router
+    app.include_router(spectator_router, prefix=f"/{api_config.api_version}")
+    app.include_router(coach_router, prefix=f"/{api_config.api_version}")
+    
     # Root endpoint with API information
     @app.get("/", response_model=APIInfo)
     async def root() -> APIInfo:
