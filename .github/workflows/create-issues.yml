@@ -1,0 +1,32 @@
+name: Create Issues from Template
+
+on:
+  workflow_dispatch:
+    inputs:
+      issues_file:
+        description: 'Path to the issues file (e.g., .github/ISSUES_TO_CREATE.md)'
+        required: false
+        default: '.github/ISSUES_TO_CREATE.md'
+
+jobs:
+  create_issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PyGithub
+        run: pip install PyGithub
+
+      - name: Parse and create issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          INPUT_ISSUES_FILE: ${{ github.event.inputs.issues_file }}
+        run: |
+          python .github/scripts/create_issues.py
