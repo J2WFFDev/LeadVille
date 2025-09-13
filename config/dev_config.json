@@ -65,9 +65,14 @@
     }
   },
   "mqtt": {
-    "enabled": false,
+    "enabled": true,
     "broker_host": "localhost",
     "broker_port": 1883,
+    "keepalive": 60,
+    "retry_interval": 5.0,
+    "max_retry_interval": 60.0,
+    "qos": 1,
+    "retain_status": true,
     "topic_prefix": "timer/events",
     "client_id": "leadville-timer",
     "username": null,
