@@ -66,8 +66,8 @@ statistical_timing_data.json
 # Development artifacts
 *.tmp
 *.backup
-test_*.py
-debug_*.py
+test_manual*.py
+test_debug*.py
 analyze_*.py
 
 # System files

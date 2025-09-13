@@ -76,12 +76,14 @@ if [[ $create_service == [yY] ]]; then
 [Unit]
 Description=LeadVille Impact Bridge
 After=network.target bluetooth.target
+Requires=bluetooth.target
 
 [Service]
 Type=simple
 User=$USER
 WorkingDirectory=$PWD
 Environment=PATH=$PWD/venv/bin
+Environment=PYTHONPATH=$PWD/src
 ExecStart=$PWD/venv/bin/python leadville_bridge.py
 Restart=always
 RestartSec=5
@@ -97,6 +99,19 @@ EOF
     
     echo "✅ Service created. Start with: sudo systemctl start leadville-bridge"
     echo "   View logs with: journalctl -u leadville-bridge -f"
+fi
+
+# Setup networking components
+echo ""
+read -p "🌐 Setup networking components (AP/Client mode switching)? (y/N): " setup_networking
+if [[ $setup_networking == [yY] ]]; then
+    echo "Setting up networking components..."
+    
+    # Make setup script executable and run it
+    chmod +x scripts/network/setup_networking.sh
+    sudo ./scripts/network/setup_networking.sh
+    
+    echo "✅ Networking setup complete!"
 fi
 
 # Final setup validation

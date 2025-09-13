@@ -40,6 +40,9 @@ dev = [
     "flake8>=4.0",
     "mypy>=0.950",
     "pre-commit>=2.15",
+    # FastAPI testing dependencies
+    "httpx>=0.25.0",
+    "pytest-mock>=3.10.0",
 ]
 test = [
     "pytest>=6.0",
@@ -49,6 +52,7 @@ test = [
 
 [project.scripts]
 leadville-bridge = "leadville_bridge:main"
+leadville-api = "impact_bridge.api.main:main"
 
 [project.urls]
 Homepage = "https://github.com/example/leadville-impact-bridge"
