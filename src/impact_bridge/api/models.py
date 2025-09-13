@@ -208,3 +208,163 @@ class DeviceHealthMonitoringResponse(BaseModel):
     enabled: bool = Field(..., description="Current monitoring status")
     interval: Optional[float] = Field(None, description="Current monitoring interval")
     message: str = Field(..., description="Status message")
+
+
+# Scorekeeper Interface Models
+
+class RunInfo(BaseModel):
+    """Basic run information for scorekeeper interface."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    id: int = Field(..., description="Run ID")
+    match_id: int = Field(..., description="Match ID")
+    stage_id: int = Field(..., description="Stage ID")
+    shooter_id: int = Field(..., description="Shooter ID")
+    shooter_name: str = Field(..., description="Shooter name")
+    squad: Optional[str] = Field(None, description="Shooter squad")
+    stage_name: str = Field(..., description="Stage name")
+    stage_number: int = Field(..., description="Stage number")
+    match_name: str = Field(..., description="Match name")
+    status: str = Field(..., description="Run status")
+    started_ts: Optional[datetime] = Field(None, description="Run start timestamp")
+    ended_ts: Optional[datetime] = Field(None, description="Run end timestamp")
+    timer_events_count: int = Field(0, description="Number of timer events")
+    sensor_events_count: int = Field(0, description="Number of sensor events")
+    has_notes: bool = Field(False, description="Whether run has notes")
+    created_at: datetime = Field(..., description="Run creation timestamp")
+    updated_at: datetime = Field(..., description="Run last updated timestamp")
+
+
+class RunsListRequest(BaseModel):
+    """Request to list runs with filtering."""
+    
+    match_id: Optional[int] = Field(None, description="Filter by match ID")
+    stage_id: Optional[int] = Field(None, description="Filter by stage ID")
+    squad: Optional[str] = Field(None, description="Filter by squad")
+    status: Optional[str] = Field(None, description="Filter by status")
+    page: int = Field(1, ge=1, description="Page number")
+    page_size: int = Field(50, ge=1, le=500, description="Page size")
+    sort_by: str = Field("created_at", description="Sort field")
+    sort_order: str = Field("desc", pattern="^(asc|desc)$", description="Sort order")
+
+
+class RunsListResponse(BaseModel):
+    """Response containing paginated list of runs."""
+    
+    runs: List[RunInfo] = Field(..., description="List of runs")
+    total: int = Field(..., description="Total number of runs")
+    page: int = Field(..., description="Current page")
+    page_size: int = Field(..., description="Page size")
+    total_pages: int = Field(..., description="Total number of pages")
+
+
+class TimerEventInfo(BaseModel):
+    """Timer event information for alignment validation."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    id: int = Field(..., description="Timer event ID")
+    ts_utc: datetime = Field(..., description="Event timestamp")
+    type: str = Field(..., description="Event type")
+    raw: Optional[str] = Field(None, description="Raw event data")
+    is_aligned: bool = Field(True, description="Whether event is properly aligned")
+    alignment_offset_ms: Optional[float] = Field(None, description="Alignment offset in milliseconds")
+
+
+class TimerAlignmentUpdateRequest(BaseModel):
+    """Request to update timer event alignment."""
+    
+    event_id: int = Field(..., description="Timer event ID")
+    new_timestamp: datetime = Field(..., description="New aligned timestamp")
+    reason: str = Field(..., min_length=1, max_length=500, description="Reason for alignment change")
+    author_role: str = Field(..., description="Role of person making change")
+
+
+class TimerAlignmentUpdateResponse(BaseModel):
+    """Response from timer alignment update."""
+    
+    success: bool = Field(..., description="Whether update was successful")
+    event_id: int = Field(..., description="Timer event ID")
+    old_timestamp: datetime = Field(..., description="Previous timestamp")
+    new_timestamp: datetime = Field(..., description="New timestamp")
+    offset_ms: float = Field(..., description="Time offset in milliseconds")
+    message: str = Field(..., description="Status message")
+    audit_entry_id: Optional[int] = Field(None, description="Audit trail entry ID")
+
+
+class AuditTrailEntry(BaseModel):
+    """Audit trail entry for run corrections."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    id: int = Field(..., description="Audit entry ID")
+    run_id: int = Field(..., description="Run ID")
+    change_type: str = Field(..., description="Type of change made")
+    field_name: str = Field(..., description="Field that was changed")
+    old_value: Optional[str] = Field(None, description="Previous value")
+    new_value: Optional[str] = Field(None, description="New value")
+    reason: str = Field(..., description="Reason for change")
+    author_role: str = Field(..., description="Role of person making change")
+    timestamp: datetime = Field(..., description="Change timestamp")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional change metadata")
+
+
+class AuditTrailResponse(BaseModel):
+    """Response containing audit trail entries."""
+    
+    entries: List[AuditTrailEntry] = Field(..., description="List of audit entries")
+    total: int = Field(..., description="Total number of entries")
+    run_id: int = Field(..., description="Run ID")
+
+
+class RunExportRequest(BaseModel):
+    """Request to export runs data."""
+    
+    format: str = Field("csv", pattern="^(csv|ndjson)$", description="Export format")
+    match_id: Optional[int] = Field(None, description="Filter by match ID")
+    stage_id: Optional[int] = Field(None, description="Filter by stage ID")
+    squad: Optional[str] = Field(None, description="Filter by squad")
+    status: Optional[str] = Field(None, description="Filter by status")
+    include_events: bool = Field(False, description="Include timer and sensor events")
+    include_audit: bool = Field(False, description="Include audit trail")
+
+
+class RunExportResponse(BaseModel):
+    """Response from run export operation."""
+    
+    success: bool = Field(..., description="Whether export was successful")
+    format: str = Field(..., description="Export format")
+    filename: str = Field(..., description="Generated filename")
+    download_url: Optional[str] = Field(None, description="Download URL if available")
+    record_count: int = Field(..., description="Number of records exported")
+    file_size_bytes: int = Field(..., description="File size in bytes")
+    message: str = Field(..., description="Status message")
+
+
+class RunValidationResult(BaseModel):
+    """Run validation results."""
+    
+    run_id: int = Field(..., description="Run ID")
+    is_valid: bool = Field(..., description="Whether run data is valid")
+    issues: List[str] = Field(default_factory=list, description="List of validation issues")
+    warnings: List[str] = Field(default_factory=list, description="List of validation warnings")
+    timer_alignment_status: str = Field(..., description="Timer alignment validation status")
+    event_correlation_score: Optional[float] = Field(None, description="Event correlation score (0-1)")
+
+
+class BulkValidationRequest(BaseModel):
+    """Request to validate multiple runs."""
+    
+    run_ids: List[int] = Field(..., min_items=1, max_items=100, description="List of run IDs to validate")
+    check_timer_alignment: bool = Field(True, description="Check timer alignment")
+    check_event_correlation: bool = Field(True, description="Check shot-to-impact correlation")
+
+
+class BulkValidationResponse(BaseModel):
+    """Response from bulk validation operation."""
+    
+    results: List[RunValidationResult] = Field(..., description="Validation results per run")
+    summary: Dict[str, int] = Field(..., description="Summary statistics")
+    total_processed: int = Field(..., description="Total runs processed")
+    processing_time_ms: float = Field(..., description="Processing time in milliseconds")
