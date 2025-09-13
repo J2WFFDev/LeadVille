@@ -77,3 +77,134 @@ class APIInfo(BaseModel):
     description: str = Field(..., description="API description")
     contact: Optional[Dict[str, str]] = Field(None, description="Contact information")
     license: Optional[Dict[str, str]] = Field(None, description="License information")
+
+
+# Device Management Models
+
+class DiscoveredDevice(BaseModel):
+    """Discovered BLE device information."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    address: str = Field(..., description="Device MAC address")
+    name: Optional[str] = Field(None, description="Device name")
+    rssi: int = Field(..., description="Signal strength in dBm")
+    manufacturer_data: Dict[int, str] = Field(default_factory=dict, description="Manufacturer data (hex encoded)")
+    service_uuids: List[str] = Field(default_factory=list, description="Advertised service UUIDs")
+    local_name: Optional[str] = Field(None, description="Local device name")
+    is_connectable: bool = Field(True, description="Whether device accepts connections")
+    device_type: Optional[str] = Field(None, description="Identified device type (bt50, amg, unknown)")
+
+
+class DeviceHealthStatus(BaseModel):
+    """Device health status information."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    address: str = Field(..., description="Device MAC address")
+    is_connected: bool = Field(..., description="Current connection status")
+    rssi: Optional[int] = Field(None, description="Signal strength in dBm")
+    battery_level: Optional[float] = Field(None, description="Battery level percentage")
+    last_seen: datetime = Field(..., description="Last successful contact timestamp")
+    connection_attempts: int = Field(0, description="Number of connection attempts")
+    last_error: Optional[str] = Field(None, description="Last error message")
+
+
+class DeviceInfo(BaseModel):
+    """Complete device information."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    address: str = Field(..., description="Device MAC address")
+    label: str = Field(..., description="Device label/name")
+    target_id: Optional[int] = Field(None, description="Assigned target ID")
+    node_id: Optional[int] = Field(None, description="Assigned node ID")
+    last_seen: Optional[datetime] = Field(None, description="Last seen timestamp")
+    battery: Optional[float] = Field(None, description="Battery level percentage")
+    rssi: Optional[int] = Field(None, description="Signal strength in dBm")
+    calibration: Optional[Dict[str, Any]] = Field(None, description="Device calibration data")
+    is_connected: bool = Field(False, description="Current connection status")
+    last_error: Optional[str] = Field(None, description="Last error message")
+    connection_attempts: int = Field(0, description="Number of connection attempts")
+
+
+class DeviceDiscoveryRequest(BaseModel):
+    """Request to start device discovery."""
+    
+    duration: float = Field(10.0, ge=1.0, le=60.0, description="Discovery duration in seconds")
+
+
+class DeviceDiscoveryResponse(BaseModel):
+    """Response from device discovery."""
+    
+    devices: List[DiscoveredDevice] = Field(..., description="List of discovered devices")
+    duration: float = Field(..., description="Actual discovery duration")
+    total_found: int = Field(..., description="Total number of devices found")
+
+
+class DevicePairRequest(BaseModel):
+    """Request to pair with a device."""
+    
+    address: str = Field(..., description="Device MAC address")
+    device_type: str = Field("unknown", description="Device type hint")
+
+
+class DevicePairResponse(BaseModel):
+    """Response from device pairing attempt."""
+    
+    success: bool = Field(..., description="Whether pairing was successful")
+    address: str = Field(..., description="Device MAC address")
+    message: str = Field(..., description="Status message")
+
+
+class DeviceAssignRequest(BaseModel):
+    """Request to assign device to target."""
+    
+    address: str = Field(..., description="Device MAC address")
+    target_id: int = Field(..., description="Target ID to assign to")
+
+
+class DeviceAssignResponse(BaseModel):
+    """Response from device assignment."""
+    
+    success: bool = Field(..., description="Whether assignment was successful")
+    address: str = Field(..., description="Device MAC address")
+    target_id: int = Field(..., description="Target ID")
+    message: str = Field(..., description="Status message")
+
+
+class DeviceUnassignRequest(BaseModel):
+    """Request to unassign device from target."""
+    
+    address: str = Field(..., description="Device MAC address")
+
+
+class DeviceUnassignResponse(BaseModel):
+    """Response from device unassignment."""
+    
+    success: bool = Field(..., description="Whether unassignment was successful")
+    address: str = Field(..., description="Device MAC address")
+    message: str = Field(..., description="Status message")
+
+
+class DeviceListResponse(BaseModel):
+    """Response containing list of devices."""
+    
+    devices: List[DeviceInfo] = Field(..., description="List of devices")
+    total: int = Field(..., description="Total number of devices")
+
+
+class DeviceHealthMonitoringRequest(BaseModel):
+    """Request to start/stop health monitoring."""
+    
+    enabled: bool = Field(..., description="Enable or disable monitoring")
+    interval: float = Field(30.0, ge=5.0, le=300.0, description="Monitoring interval in seconds")
+
+
+class DeviceHealthMonitoringResponse(BaseModel):
+    """Response from health monitoring operation."""
+    
+    success: bool = Field(..., description="Whether operation was successful")
+    enabled: bool = Field(..., description="Current monitoring status")
+    interval: Optional[float] = Field(None, description="Current monitoring interval")
+    message: str = Field(..., description="Status message")
