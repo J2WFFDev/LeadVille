@@ -1,1 +1,1 @@
-# Tests package for LeadVille Impact Bridge
+"""Tests for LeadVille Impact Bridge."""
