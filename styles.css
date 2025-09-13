@@ -145,6 +145,37 @@ header p {
     text-align: center;
 }
 
+.timer-vendor {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: #e3f2fd;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+.timer-vendor select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    min-width: 150px;
+}
+
+.timer-vendor button {
+    padding: 8px 16px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.timer-vendor button:hover {
+    background: #0056b3;
+}
+
 button {
     padding: 10px 20px;
     border: none;
