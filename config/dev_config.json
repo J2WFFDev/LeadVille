@@ -30,5 +30,49 @@
     "calibration_samples": 100,
     "calibration_timeout_seconds": 30,
     "auto_calibrate_on_startup": true
+  },
+  "amg_timer": {
+    "device_id": "60:09:C3:1F:DC:1A",
+    "uuid": "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
+    "frame_validation": true,
+    "simulation_mode": false,
+    "health_monitoring": {
+      "enabled": true,
+      "rssi_check_interval_sec": 30.0,
+      "health_report_interval_sec": 60.0
+    },
+    "time_synchronization": {
+      "enabled": true,
+      "sync_interval_minutes": 5,
+      "drift_threshold_ms": 100
+    }
+  },
+  "mqtt": {
+    "enabled": false,
+    "broker_host": "localhost",
+    "broker_port": 1883,
+    "topic_prefix": "timer/events",
+    "client_id": "leadville-timer",
+    "username": null,
+    "password": null
+  },
+  "websocket": {
+    "enabled": true,
+    "host": "localhost",
+    "port": 8765
+  },
+  "database": {
+    "enabled": true,
+    "db_path": "timer_events.db",
+    "json_backup_path": "logs/timer_events_backup.jsonl"
+  },
+  "simulation": {
+    "mode": "multi_shot",
+    "num_shots": 5,
+    "shot_interval_sec": 2.0,
+    "start_delay_sec": 3.0,
+    "random_timing": false,
+    "timing_variance_sec": 0.5,
+    "custom_sequence": null
   }
 }
