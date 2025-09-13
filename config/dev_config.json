@@ -30,5 +30,31 @@
     "calibration_samples": 100,
     "calibration_timeout_seconds": 30,
     "auto_calibrate_on_startup": true
+  },
+  "bt50": {
+    "sensor_id": "BT50_01",
+    "mac_address": "F8:FE:92:31:12:E3",
+    "notify_uuid": "0000ffe4-0000-1000-8000-00805f9a34fb",
+    "auto_calibrate": true,
+    "calibration_samples": 100,
+    "simulation_mode": false,
+    "idle_reconnect_sec": 300.0,
+    "keepalive_batt_sec": 30.0
+  },
+  "mqtt": {
+    "enabled": false,
+    "broker_host": "localhost",
+    "broker_port": 1883,
+    "username": null,
+    "password": null,
+    "base_topic": "leadville/sensors",
+    "qos": 1,
+    "retain": false
+  },
+  "database": {
+    "enabled": false,
+    "db_path": "leadville_sensors.db",
+    "batch_size": 100,
+    "flush_interval": 5.0
   }
 }
