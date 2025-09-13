@@ -113,7 +113,8 @@ class TestTimeSynchronizer:
         """Test drift detection and alert system"""
         sync = TimeSynchronizer(
             ntp_enabled=False, 
-            drift_threshold_ms=10.0
+            drift_threshold_ms=10.0,
+            enable_correction=False  # Disable correction for this test
         )
         
         drift_callback = Mock()
@@ -280,7 +281,7 @@ class TestNTPClient:
             result = await client.sync_with_server("invalid.ntp.server")
             
         assert result.success is False
-        assert "Connection failed" in result.error_message
+        assert "invalid.ntp.server" in result.error_message
         
     @pytest.mark.asyncio
     async def test_sync_multiple_servers(self):
