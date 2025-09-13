@@ -208,3 +208,95 @@ class DeviceHealthMonitoringResponse(BaseModel):
     enabled: bool = Field(..., description="Current monitoring status")
     interval: Optional[float] = Field(None, description="Current monitoring interval")
     message: str = Field(..., description="Status message")
+
+
+# Admin Dashboard Models
+
+class NodeInfo(BaseModel):
+    """Node information for admin dashboard."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    id: int = Field(..., description="Node ID")
+    name: str = Field(..., description="Node name")
+    mode: str = Field(..., description="Network mode (online, offline, simulation)")
+    ssid: Optional[str] = Field(None, description="Connected SSID")
+    ip_addr: Optional[str] = Field(None, description="IP address")
+    versions: Optional[Dict[str, str]] = Field(None, description="Software version information")
+    created_at: datetime = Field(..., description="Node creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+    status: str = Field(..., description="Current node status")
+
+
+class SystemMonitoring(BaseModel):
+    """Extended system monitoring information."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    timestamp: datetime = Field(..., description="Monitoring timestamp")
+    cpu_usage_percent: float = Field(..., description="CPU usage percentage")
+    memory_usage_mb: float = Field(..., description="Memory usage in MB")
+    memory_percent: float = Field(..., description="Memory usage percentage")
+    disk_usage_gb: float = Field(..., description="Disk usage in GB")
+    disk_percent: float = Field(..., description="Disk usage percentage")
+    temperature_celsius: Optional[float] = Field(None, description="CPU temperature in Celsius")
+    uptime_seconds: float = Field(..., description="System uptime in seconds")
+    load_average: List[float] = Field(..., description="System load average (1, 5, 15 min)")
+
+
+class ServiceHealth(BaseModel):
+    """Service health status information."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    service_name: str = Field(..., description="Service name")
+    status: str = Field(..., description="Service status (healthy, degraded, unhealthy)")
+    last_check: datetime = Field(..., description="Last health check timestamp")
+    message: Optional[str] = Field(None, description="Status message")
+    response_time_ms: Optional[float] = Field(None, description="Response time in milliseconds")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional service metadata")
+
+
+class LogEntry(BaseModel):
+    """Log entry for real-time viewer."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    timestamp: datetime = Field(..., description="Log timestamp")
+    level: str = Field(..., description="Log level")
+    message: str = Field(..., description="Log message")
+    source: Optional[str] = Field(None, description="Log source")
+    line_number: Optional[int] = Field(None, description="Line number in log file")
+
+
+class NetworkConfigRequest(BaseModel):
+    """Network configuration change request."""
+    
+    mode: str = Field(..., description="Network mode (online/offline)")
+    ssid: Optional[str] = Field(None, description="WiFi SSID for online mode")
+    password: Optional[str] = Field(None, description="WiFi password for online mode")
+
+
+class NetworkConfigResponse(BaseModel):
+    """Network configuration change response."""
+    
+    success: bool = Field(..., description="Whether configuration change was successful")
+    mode: str = Field(..., description="Current network mode")
+    message: str = Field(..., description="Status message")
+    ip_address: Optional[str] = Field(None, description="Current IP address")
+
+
+class NodeUpdateRequest(BaseModel):
+    """Request to update node information."""
+    
+    name: Optional[str] = Field(None, description="Node name")
+    mode: Optional[str] = Field(None, description="Network mode")
+    versions: Optional[Dict[str, str]] = Field(None, description="Version information")
+
+
+class LogViewerResponse(BaseModel):
+    """Log viewer response with log entries."""
+    
+    logs: List[LogEntry] = Field(..., description="Log entries")
+    total_lines: int = Field(..., description="Total lines available")
+    has_more: bool = Field(..., description="Whether there are more logs available")

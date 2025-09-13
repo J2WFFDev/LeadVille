@@ -15,6 +15,7 @@ from .exceptions import setup_exception_handlers
 from .health import router as health_router
 from .metrics import router as metrics_router
 from .devices import router as devices_router
+from .admin import router as admin_router
 from .middleware import setup_middleware
 from .models import APIInfo
 
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix=f"/{api_config.api_version}", tags=["Health"])
     app.include_router(metrics_router, prefix=f"/{api_config.api_version}", tags=["Metrics"])
     app.include_router(devices_router, prefix=f"/{api_config.api_version}/admin/devices", tags=["Device Management"])
+    app.include_router(admin_router, prefix=f"/{api_config.api_version}/admin", tags=["Admin Dashboard"])
     
     # Root endpoint with API information
     @app.get("/", response_model=APIInfo)
