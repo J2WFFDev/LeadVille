@@ -71,6 +71,13 @@ class TimerManager {
         this.timeLeft = 0; // Time in seconds
         this.timerInterval = null;
         this.defaultMinutes = 5;
+        
+        // Timer vendor support
+        this.currentVendor = 'amg_labs'; // Default vendor
+        this.availableVendors = {
+            'amg_labs': 'AMG Labs Commander',
+            'specialpie': 'SpecialPie Pro Timer'
+        };
     }
 
     start() {
@@ -83,21 +90,21 @@ class TimerManager {
         }
         
         this.isRunning = true;
-        this.updateSystemStatus('timer', 'Running', 'running');
+        this.updateSystemStatus('timer', `${this.availableVendors[this.currentVendor]} - Running`, 'running');
         
         this.timerInterval = setInterval(() => {
             this.tick();
         }, 1000);
         
         this.updateButtons();
-        console.log('Timer started');
+        console.log(`Timer started with ${this.currentVendor} vendor`);
     }
 
     pause() {
         if (!this.isRunning) return;
         
         this.isRunning = false;
-        this.updateSystemStatus('timer', 'Paused', 'ready');
+        this.updateSystemStatus('timer', `${this.availableVendors[this.currentVendor]} - Paused`, 'ready');
         
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
@@ -111,7 +118,7 @@ class TimerManager {
     reset() {
         this.isRunning = false;
         this.timeLeft = 0;
-        this.updateSystemStatus('timer', 'Ready', 'ready');
+        this.updateSystemStatus('timer', `${this.availableVendors[this.currentVendor]} - Ready`, 'ready');
         
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
@@ -121,6 +128,39 @@ class TimerManager {
         this.updateDisplay();
         this.updateButtons();
         console.log('Timer reset');
+    }
+
+    switchVendor(vendorId) {
+        if (vendorId in this.availableVendors) {
+            const oldVendor = this.currentVendor;
+            this.currentVendor = vendorId;
+            
+            // Reset timer when switching vendors for safety
+            this.reset();
+            
+            // Update status display
+            this.updateSystemStatus('timer', 
+                `${this.availableVendors[vendorId]} - Ready`, 
+                'ready'
+            );
+            
+            // Update vendor selector
+            document.getElementById('timer-vendor').value = vendorId;
+            
+            console.log(`Timer vendor switched from ${oldVendor} to ${vendorId}`);
+            
+            // In a real implementation, this would make an API call to switch the backend
+            // For now, just log the change
+            return true;
+        }
+        return false;
+    }
+
+    getCurrentVendor() {
+        return {
+            id: this.currentVendor,
+            name: this.availableVendors[this.currentVendor]
+        };
     }
 
     tick() {
@@ -135,7 +175,7 @@ class TimerManager {
     onTimerComplete() {
         this.isRunning = false;
         this.timeLeft = 0;
-        this.updateSystemStatus('timer', 'Completed', 'ready');
+        this.updateSystemStatus('timer', `${this.availableVendors[this.currentVendor]} - Completed`, 'ready');
         
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
@@ -220,6 +260,18 @@ class InterfaceManager {
         
         document.getElementById('reset-timer').addEventListener('click', () => {
             this.timer.reset();
+        });
+        
+        // Timer vendor switching
+        document.getElementById('switch-vendor').addEventListener('click', () => {
+            const vendorSelect = document.getElementById('timer-vendor');
+            const selectedVendor = vendorSelect.value;
+            
+            if (this.timer.switchVendor(selectedVendor)) {
+                console.log(`Successfully switched to ${selectedVendor} timer`);
+            } else {
+                console.error(`Failed to switch to ${selectedVendor} timer`);
+            }
         });
         
         // Timer input validation
