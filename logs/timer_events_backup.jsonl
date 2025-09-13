@@ -1,0 +1,1 @@
+{"timestamp": "2025-09-13T18:27:17.155100+00:00", "device_id": "60:09:C3:1F:DC:1A", "event_type": "shot_detected", "shot_state": "ACTIVE", "current_shot": 1, "total_shots": 5, "current_time": 2.34, "split_time": 0.0, "event_detail": "Shot 1: 2.34s", "raw_hex": "010300010234", "session_id": "session_20250913_182717"}
