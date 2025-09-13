@@ -208,3 +208,102 @@ class DeviceHealthMonitoringResponse(BaseModel):
     enabled: bool = Field(..., description="Current monitoring status")
     interval: Optional[float] = Field(None, description="Current monitoring interval")
     message: str = Field(..., description="Status message")
+
+
+# Range Officer (RO) Models
+
+class ROTarget(BaseModel):
+    """Range Officer target information."""
+    
+    id: int = Field(..., description="Target ID")
+    label: str = Field(..., description="Target label")
+    x: float = Field(..., description="X coordinate on stage layout")
+    y: float = Field(..., description="Y coordinate on stage layout")
+    status: str = Field(..., description="Target status (online, degraded, offline)")
+    device_address: Optional[str] = Field(None, description="Associated device MAC address")
+    last_hit: Optional[datetime] = Field(None, description="Last hit timestamp")
+
+
+class ROStageLayout(BaseModel):
+    """Range Officer stage layout configuration."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    stage_id: str = Field(..., description="Stage identifier")
+    name: str = Field(..., description="Stage name")
+    targets: List[ROTarget] = Field(..., description="List of targets in stage")
+    width: float = Field(800, description="Stage layout width")
+    height: float = Field(400, description="Stage layout height")
+
+
+class ROHit(BaseModel):
+    """Range Officer hit information."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    id: str = Field(..., description="Hit ID")
+    target_id: int = Field(..., description="Target ID that was hit")
+    timestamp: datetime = Field(..., description="Hit timestamp")
+    x: Optional[float] = Field(None, description="Hit X coordinate on target")
+    y: Optional[float] = Field(None, description="Hit Y coordinate on target")
+    string_id: Optional[int] = Field(None, description="Associated string ID")
+
+
+class ROString(BaseModel):
+    """Range Officer string information."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    id: int = Field(..., description="String ID")
+    shooter: str = Field(..., description="Shooter name/identifier")
+    start_time: datetime = Field(..., description="String start timestamp")
+    end_time: Optional[datetime] = Field(None, description="String end timestamp")
+    hits: List[ROHit] = Field(default_factory=list, description="Hits in this string")
+    stage_id: str = Field(..., description="Stage identifier")
+    status: str = Field(..., description="String status (active, completed, cancelled)")
+
+
+class ROStringRequest(BaseModel):
+    """Request to start a new string."""
+    
+    shooter: str = Field(..., description="Shooter name/identifier")
+    stage_id: str = Field(..., description="Stage identifier")
+
+
+class ROStringResponse(BaseModel):
+    """Response from string operations."""
+    
+    success: bool = Field(..., description="Whether operation was successful")
+    string: Optional[ROString] = Field(None, description="String information")
+    message: str = Field(..., description="Status message")
+
+
+class ROSystemStatus(BaseModel):
+    """Range Officer system status."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    system_online: bool = Field(..., description="Overall system status")
+    active_string: Optional[ROString] = Field(None, description="Currently active string")
+    total_targets: int = Field(..., description="Total number of targets")
+    online_targets: int = Field(..., description="Number of online targets")
+    degraded_targets: int = Field(..., description="Number of degraded targets")
+    offline_targets: int = Field(..., description="Number of offline targets")
+    last_update: datetime = Field(..., description="Last status update timestamp")
+
+
+class ROHitRequest(BaseModel):
+    """Request to register a hit."""
+    
+    target_id: int = Field(..., description="Target ID")
+    timestamp: Optional[datetime] = Field(None, description="Hit timestamp (defaults to now)")
+    x: Optional[float] = Field(None, description="Hit X coordinate")
+    y: Optional[float] = Field(None, description="Hit Y coordinate")
+
+
+class ROHitResponse(BaseModel):
+    """Response from hit registration."""
+    
+    success: bool = Field(..., description="Whether hit was registered successfully")
+    hit: Optional[ROHit] = Field(None, description="Hit information")
+    message: str = Field(..., description="Status message")
