@@ -60,8 +60,13 @@ logs/main/*.ndjson
 
 # Calibration and Runtime Data
 *.db
+*.db-shm
+*.db-wal
 timing_calibration.json
 statistical_timing_data.json
+
+# API logs and runtime data
+logs/api*.ndjson
 
 # Development artifacts
 *.tmp
