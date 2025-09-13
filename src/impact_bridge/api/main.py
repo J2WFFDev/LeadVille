@@ -17,6 +17,7 @@ from .metrics import router as metrics_router
 from .devices import router as devices_router
 from .middleware import setup_middleware
 from .models import APIInfo
+from .auth.routes import router as auth_router
 
 
 def create_app() -> FastAPI:
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     # Add API routes
     app.include_router(health_router, prefix=f"/{api_config.api_version}", tags=["Health"])
     app.include_router(metrics_router, prefix=f"/{api_config.api_version}", tags=["Metrics"])
+    app.include_router(auth_router, prefix=f"/{api_config.api_version}", tags=["Authentication"])
     app.include_router(devices_router, prefix=f"/{api_config.api_version}/admin/devices", tags=["Device Management"])
     
     # Root endpoint with API information
