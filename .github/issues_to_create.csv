@@ -1,0 +1,18 @@
+Title,Body,Labels
+[FEATURE] MQTT Internal Message Bus,"Set up internal MQTT message bus with mosquitto broker for real-time communication between LeadVille system components.",feature,critical,backend,infrastructure,phase-1
+[FEATURE] Networking Modes (Online/Offline),"Implement dual networking modes with AP mode (offline) and client mode (online) switching capabilities.",feature,critical,infrastructure,phase-1
+[FEATURE] Pluggable Timer Driver Architecture,"Create abstract timer driver interface supporting multiple timer vendors with AMG Labs Commander as reference implementation.",feature,high,ble,backend,phase-2
+[FEATURE] Device Pairing and Management,"Implement BLE device discovery, pairing, assignment to targets/stages, and comprehensive device management.",feature,high,ble,backend,phase-2
+[FEATURE] Time Synchronization System,"Implement time synchronization protocol for sensors and timers with drift monitoring and correction.",feature,high,ble,backend,phase-2
+[FEATURE] Frontend Foundation (React + Vite + Tailwind),"Set up modern React frontend with Vite build system and Tailwind CSS for responsive, kiosk-friendly user interfaces.",feature,critical,frontend,phase-3
+[FEATURE] Authentication & Role-Based Access,"Implement JWT authentication with refresh tokens and comprehensive role-based access control system.",feature,critical,frontend,backend,phase-3
+[FEATURE] Admin Dashboard & System Monitoring,"Create comprehensive Admin dashboard for node management, network configuration, and system monitoring.",feature,critical,frontend,backend,phase-3
+[FEATURE] Range Officer (RO) View,"Create visual Range Officer interface with stage layout, target status, live hit markers, and match management.",feature,critical,frontend,phase-3
+[FEATURE] Scorekeeper Interface,"Build tabular scorekeeper interface with runs management, timer alignment validation, and audit trail.",feature,high,frontend,phase-3
+[FEATURE] Spectator & Coach Views,"Create read-only spectator dashboard and coach interface with notes, bookmarks, and privacy controls.",feature,medium,frontend,phase-3
+[FEATURE] WebSocket Real-time Updates,"Implement WebSocket endpoint for real-time updates with <150ms end-to-end latency for live match monitoring.",feature,critical,frontend,backend,phase-3
+[FEATURE] Boot Status Screen (Kiosk Mode),"Create fullscreen boot status display with system information, service status, and auto-refresh for kiosk deployment.",feature,high,frontend,infrastructure,phase-4
+[FEATURE] Simulation Mode & Testing Framework,"Create comprehensive simulation mode with demo data and complete testing framework for development and demonstration.",feature,high,backend,phase-4
+[FEATURE] Data Export & Analytics,"Implement comprehensive data export with CSV, NDJSON, and optional Parquet formats for analysis and archiving.",feature,medium,backend,phase-4
+[FEATURE] Installation & Deployment System,"Create automated installation system with comprehensive setup documentation and deployment tools.",feature,high,infrastructure,documentation,phase-4
+[FEATURE] Monitoring & Observability,"Add comprehensive monitoring, metrics, structured logging, and system health indicators for production operation.",feature,high,backend,infrastructure,phase-4
