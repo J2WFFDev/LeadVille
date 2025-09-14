@@ -74,7 +74,7 @@ class NTPMonitor:
         # NTP client
         self.ntp_client = NTPClient(
             servers=ntp_servers,
-            timeout_seconds=sync_timeout_seconds
+            timeout=sync_timeout_seconds
         )
         
         # State tracking
