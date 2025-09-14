@@ -10,6 +10,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from ..logs import NdjsonLogger
+from ..monitoring import HealthAggregator, SystemMonitor
 from .config import api_config
 from .models import ComponentHealth, DetailedHealthStatus, HealthStatus
 
@@ -19,12 +20,25 @@ limiter = Limiter(key_func=get_remote_address)
 # Application start time for uptime calculation
 _app_start_time = time.time()
 
+# Global health aggregator instance
+_health_aggregator: Optional[HealthAggregator] = None
+
+
+def get_health_aggregator() -> HealthAggregator:
+    """Get or create the global health aggregator instance."""
+    global _health_aggregator
+    if _health_aggregator is None:
+        system_monitor = SystemMonitor()
+        _health_aggregator = HealthAggregator(system_monitor=system_monitor)
+    return _health_aggregator
+
 
 class HealthChecker:
     """Service for checking component health."""
     
-    def __init__(self, logger: NdjsonLogger):
+    def __init__(self, logger: NdjsonLogger, health_aggregator: Optional[HealthAggregator] = None):
         self.logger = logger
+        self.health_aggregator = health_aggregator or get_health_aggregator()
     
     async def check_database(self) -> ComponentHealth:
         """Check database connectivity."""
@@ -109,6 +123,48 @@ class HealthChecker:
                 last_check=datetime.utcnow(),
                 response_time_ms=response_time
             )
+    
+    async def get_comprehensive_health(self) -> DetailedHealthStatus:
+        """Get comprehensive health status using the health aggregator."""
+        try:
+            aggregated_health = await self.health_aggregator.get_aggregated_health()
+            uptime = time.time() - _app_start_time
+            
+            # Convert monitoring ComponentHealth to API ComponentHealth
+            api_components = []
+            for comp in aggregated_health.components:
+                api_components.append(ComponentHealth(
+                    name=comp.name,
+                    status=comp.status.value,
+                    message=comp.message,
+                    last_check=comp.last_check,
+                    response_time_ms=comp.response_time_ms,
+                    metadata=comp.metadata
+                ))
+            
+            return DetailedHealthStatus(
+                status=aggregated_health.overall_status.value,
+                timestamp=aggregated_health.timestamp,
+                version=api_config.api_version,
+                uptime_seconds=uptime,
+                components=api_components
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Comprehensive health check failed: {e}")
+            uptime = time.time() - _app_start_time
+            return DetailedHealthStatus(
+                status="unhealthy",
+                timestamp=datetime.utcnow(),
+                version=api_config.api_version,
+                uptime_seconds=uptime,
+                components=[ComponentHealth(
+                    name="health_system",
+                    status="unhealthy",
+                    message=f"Health system failure: {str(e)}",
+                    last_check=datetime.utcnow()
+                )]
+            )
 
 
 def get_health_checker() -> HealthChecker:
@@ -116,7 +172,8 @@ def get_health_checker() -> HealthChecker:
     # TODO: Integrate with actual logger instance
     from ..logs import NdjsonLogger
     logger = NdjsonLogger("/tmp", "api")
-    return HealthChecker(logger)
+    health_aggregator = get_health_aggregator()
+    return HealthChecker(logger, health_aggregator)
 
 
 @router.get("/health", response_model=HealthStatus)
@@ -139,58 +196,15 @@ async def detailed_health_check(
     request: Request,
     health_checker: HealthChecker = Depends(get_health_checker)
 ) -> DetailedHealthStatus:
-    """Detailed health check with component status."""
-    uptime = time.time() - _app_start_time
-    
-    # Check all components concurrently
-    try:
-        components = await asyncio.gather(
-            health_checker.check_database(),
-            health_checker.check_mqtt(),
-            health_checker.check_ble_services(),
-            return_exceptions=True
-        )
-        
-        # Filter out exceptions and convert to ComponentHealth objects
-        valid_components: List[ComponentHealth] = []
-        for component in components:
-            if isinstance(component, ComponentHealth):
-                valid_components.append(component)
-            else:
-                # Create error component for exceptions
-                valid_components.append(ComponentHealth(
-                    name="unknown",
-                    status="unhealthy",
-                    message=f"Health check exception: {str(component)}",
-                    last_check=datetime.utcnow()
-                ))
-        
-        # Determine overall status
-        overall_status = "healthy"
-        if any(c.status == "unhealthy" for c in valid_components):
-            overall_status = "unhealthy"
-        elif any(c.status == "degraded" for c in valid_components):
-            overall_status = "degraded"
-        
-        return DetailedHealthStatus(
-            status=overall_status,
-            timestamp=datetime.utcnow(),
-            version=api_config.api_version,
-            uptime_seconds=uptime,
-            components=valid_components
-        )
-        
-    except Exception as e:
-        # Fallback if component checks fail
-        return DetailedHealthStatus(
-            status="unhealthy",
-            timestamp=datetime.utcnow(),
-            version=api_config.api_version,
-            uptime_seconds=uptime,
-            components=[ComponentHealth(
-                name="system",
-                status="unhealthy",
-                message=f"Health check system failure: {str(e)}",
-                last_check=datetime.utcnow()
-            )]
-        )
+    """Detailed health check with comprehensive component status."""
+    return await health_checker.get_comprehensive_health()
+
+
+@router.get("/health/comprehensive", response_model=DetailedHealthStatus)
+@limiter.limit(f"{api_config.rate_limit_requests}/minute")  
+async def comprehensive_health_check(
+    request: Request,
+    health_checker: HealthChecker = Depends(get_health_checker)
+) -> DetailedHealthStatus:
+    """Comprehensive health check using advanced monitoring system."""
+    return await health_checker.get_comprehensive_health()
