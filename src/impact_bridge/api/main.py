@@ -6,7 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from ..logs import NdjsonLogger
@@ -18,6 +19,7 @@ from .devices import router as devices_router
 from .middleware import setup_middleware
 from .models import APIInfo
 from .auth.routes import router as auth_router
+from .kiosk import router as kiosk_router
 
 
 def create_app() -> FastAPI:
@@ -55,6 +57,13 @@ def create_app() -> FastAPI:
     app.include_router(metrics_router, prefix=f"/{api_config.api_version}", tags=["Metrics"])
     app.include_router(auth_router, prefix=f"/{api_config.api_version}", tags=["Authentication"])
     app.include_router(devices_router, prefix=f"/{api_config.api_version}/admin/devices", tags=["Device Management"])
+    app.include_router(kiosk_router, prefix=f"/{api_config.api_version}/kiosk", tags=["Kiosk"])
+    
+    # Serve kiosk HTML page
+    @app.get("/kiosk")
+    async def serve_kiosk():
+        """Serve the kiosk boot status page."""
+        return FileResponse("kiosk.html")
     
     # Root endpoint with API information
     @app.get("/", response_model=APIInfo)
