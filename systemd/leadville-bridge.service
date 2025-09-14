@@ -1,0 +1,31 @@
+[Unit]
+Description=LeadVille Impact Bridge - BLE Sensor System
+Documentation=https://github.com/J2WFFDev/LeadVille
+After=network.target bluetooth.target
+Requires=bluetooth.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=leadville
+Group=leadville
+WorkingDirectory=/opt/leadville
+Environment=PATH=/opt/leadville/venv/bin
+Environment=PYTHONPATH=/opt/leadville/src
+ExecStart=/opt/leadville/venv/bin/python leadville_bridge.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=leadville-bridge
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/leadville/logs /var/log/leadville
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

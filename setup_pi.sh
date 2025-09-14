@@ -1,9 +1,29 @@
 #!/bin/bash
-# LeadVille Pi Setup Script
+# LeadVille Pi Setup Script (Legacy)
 # Run this script on your Raspberry Pi after transferring the LeadVille project
+# 
+# ⚠️  NOTICE: This is the legacy setup script. For production deployment,
+#    use the new automated installer: ./install_pi.sh
+#
+# The new installer provides:
+# - Automated system user creation
+# - Enhanced security settings  
+# - Professional systemd service management
+# - Comprehensive validation
+# - Better error handling
 
-echo "🎯 LeadVille Impact Bridge - Pi Setup"
-echo "====================================="
+echo "🎯 LeadVille Impact Bridge - Pi Setup (Legacy)"
+echo "=============================================="
+echo ""
+echo "⚠️  RECOMMENDATION: Use the new automated installer instead:"
+echo "   sudo ./install_pi.sh"
+echo ""
+read -p "Continue with legacy setup? (y/N): " continue_legacy
+if [[ $continue_legacy != [yY] ]]; then
+    echo "Switching to new installer..."
+    exec sudo ./install_pi.sh
+fi
+echo ""
 
 # Check if we're on a Pi
 if [[ ! -f /proc/cpuinfo ]] || ! grep -q "Raspberry Pi" /proc/cpuinfo; then

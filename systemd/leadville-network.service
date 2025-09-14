@@ -1,0 +1,29 @@
+[Unit]
+Description=LeadVille Impact Bridge - Network Management
+Documentation=https://github.com/J2WFFDev/LeadVille
+After=network.target bluetooth.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=leadville
+Group=leadville
+WorkingDirectory=/opt/leadville
+Environment=PATH=/opt/leadville/venv/bin
+Environment=PYTHONPATH=/opt/leadville/src
+ExecStart=/opt/leadville/venv/bin/python -m impact_bridge.networking.network_service
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=leadville-network
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/leadville/logs /var/log/leadville
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

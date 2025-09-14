@@ -1,0 +1,32 @@
+[Unit]
+Description=LeadVille Impact Bridge - REST API Server
+Documentation=https://github.com/J2WFFDev/LeadVille
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=leadville
+Group=leadville
+WorkingDirectory=/opt/leadville
+Environment=PATH=/opt/leadville/venv/bin
+Environment=PYTHONPATH=/opt/leadville/src
+Environment=API_HOST=0.0.0.0
+Environment=API_PORT=8000
+ExecStart=/opt/leadville/venv/bin/python -m src.impact_bridge.api.main
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=leadville-api
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/leadville/logs /var/log/leadville
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
