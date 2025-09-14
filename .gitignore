@@ -92,18 +92,3 @@ site/
 
 # Jupyter Notebooks (if any added later)
 .ipynb_checkpoints/
-
-# Frontend - Node.js and React/Vite
-frontend/node_modules/
-frontend/dist/
-frontend/build/
-frontend/.vite/
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
-frontend/npm-debug.log*
-frontend/yarn-debug.log*
-frontend/yarn-error.log*
-frontend/pnpm-debug.log*
-frontend/lerna-debug.log*

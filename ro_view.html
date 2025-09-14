@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille - Range Officer View</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="ro_view.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>LeadVille Range Officer</h1>
+            <p>Live Range Management & Match Control</p>
+            <nav class="header-nav">
+                <a href="index.html" class="nav-link">MVP Dashboard</a>
+                <a href="ro_view.html" class="nav-link active">RO View</a>
+            </nav>
+        </header>
+        
+        <main class="ro-main">
+            <!-- Stage Layout Section -->
+            <div class="stage-section">
+                <div class="stage-header">
+                    <h2>Stage Layout</h2>
+                    <div class="stage-controls">
+                        <select id="stage-select" class="stage-selector">
+                            <option value="stage1">Stage 1 - Pistol Bay</option>
+                            <option value="stage2">Stage 2 - Rifle Range</option>
+                            <option value="stage3">Stage 3 - Mixed Course</option>
+                        </select>
+                        <button id="refresh-targets" class="refresh-btn">Refresh Targets</button>
+                    </div>
+                </div>
+                
+                <div class="stage-layout">
+                    <svg id="stage-svg" width="800" height="400" class="stage-canvas">
+                        <!-- Stage layout will be rendered here -->
+                    </svg>
+                </div>
+                
+                <div class="target-status-panel">
+                    <h3>Target Status Overview</h3>
+                    <div id="target-status-grid" class="target-grid">
+                        <!-- Target status badges will be populated here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Live Activity & Controls -->
+            <div class="activity-section">
+                <!-- Current String Panel -->
+                <div class="current-string-panel">
+                    <h3>Current String</h3>
+                    <div class="string-info">
+                        <div class="string-meta">
+                            <span class="string-id">String #<span id="current-string-number">1</span></span>
+                            <span class="string-time">Started: <span id="string-start-time">--:--:--</span></span>
+                            <span class="shooter-info">Shooter: <span id="current-shooter">Ready</span></span>
+                        </div>
+                        <div class="string-controls">
+                            <button id="start-string" class="control-btn start-btn">Start String</button>
+                            <button id="stop-string" class="control-btn stop-btn" disabled>Stop String</button>
+                            <button id="reset-string" class="control-btn reset-btn">Reset</button>
+                        </div>
+                    </div>
+                    
+                    <div class="live-hits-display">
+                        <h4>Live Hits</h4>
+                        <div id="hits-timeline" class="hits-timeline">
+                            <!-- Live hit markers will appear here -->
+                        </div>
+                        <div class="hit-stats">
+                            <span class="hit-count">Hits: <span id="current-hit-count">0</span></span>
+                            <span class="last-hit">Last Hit: <span id="last-hit-time">None</span></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- String Summary Panel -->
+                <div class="string-summary-panel">
+                    <h3>Last String Summary</h3>
+                    <div id="last-string-summary" class="summary-content">
+                        <div class="summary-placeholder">
+                            <p>No completed strings yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- History Sidebar -->
+            <div class="history-sidebar">
+                <h3>String History</h3>
+                <div class="history-controls">
+                    <button id="clear-history" class="control-btn secondary-btn">Clear History</button>
+                    <button id="export-data" class="control-btn secondary-btn">Export Data</button>
+                </div>
+                <div id="history-list" class="history-list">
+                    <!-- Previous strings will be listed here -->
+                </div>
+            </div>
+        </main>
+        
+        <!-- System Status Bar -->
+        <div class="system-status-bar">
+            <div class="status-item">
+                <span class="status-label">System:</span>
+                <span id="system-status" class="status-value online">Online</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Targets:</span>
+                <span id="targets-status" class="status-value">
+                    <span id="online-targets">0</span>/<span id="total-targets">0</span> Online
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Timer:</span>
+                <span id="timer-status" class="status-value ready">Ready</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Match:</span>
+                <span id="match-status" class="status-value">Standby</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="ro_view.js"></script>
+</body>
+</html>
