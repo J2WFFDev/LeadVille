@@ -92,3 +92,6 @@ site/
 
 # Jupyter Notebooks (if any added later)
 .ipynb_checkpoints/
+# Preserve snapshots from Pi and backups
+preserve/
+
