@@ -1,0 +1,31 @@
+{
+  "name": "Error Injection Test Suite",
+  "description": "Comprehensive error testing scenario with high failure rates",
+  "match_type": "custom",
+  "num_shots": 15,
+  "shot_intervals": [2.0, 1.5, 3.0, 2.5, 1.8, 2.2, 1.9, 2.7, 1.6, 2.4, 2.0, 1.7, 2.8, 2.1, 2.3],
+  "start_delay": 2.0,
+  "impact_patterns": [
+    {
+      "delay_after_shot_ms": 480.0,
+      "intensity": 0.7,
+      "duration_ms": 50.0,
+      "variance_ms": 150.0,
+      "miss_probability": 0.15
+    }
+  ],
+  "error_types": [
+    "ble_disconnect",
+    "sensor_noise", 
+    "missed_impact",
+    "false_positive",
+    "timing_drift",
+    "battery_low"
+  ],
+  "error_probability": 0.25,
+  "shooter_skill": 0.6,
+  "equipment_quality": 0.7,
+  "temperature": 25.0,
+  "humidity": 70.0,
+  "wind_speed": 5.0
+}
