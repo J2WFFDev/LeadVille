@@ -125,5 +125,58 @@
     "random_timing": false,
     "timing_variance_sec": 0.5,
     "custom_sequence": null
+  },
+  "monitoring": {
+    "enabled": true,
+    "check_interval_seconds": 30,
+    "system_thresholds": {
+      "cpu_warning_percent": 80.0,
+      "cpu_critical_percent": 95.0,
+      "memory_warning_percent": 85.0,
+      "memory_critical_percent": 95.0,
+      "disk_warning_percent": 80.0,
+      "disk_critical_percent": 90.0
+    },
+    "monitored_paths": ["/", "/tmp", "/var/log"],
+    "led_indicators": {
+      "enabled": true,
+      "hardware_enabled": true,
+      "simulation_mode": false,
+      "gpio_pins": {
+        "system_health": 18,
+        "ble_status": 23,
+        "mqtt_status": 24,
+        "database_status": 25,
+        "disk_space": 12,
+        "ntp_sync": 16
+      }
+    },
+    "alerts": {
+      "enabled": true,
+      "cooldown_minutes": 5,
+      "channels": {
+        "log": true,
+        "console": true,
+        "mqtt": true,
+        "email": false,
+        "webhook": false
+      },
+      "mqtt_topic_prefix": "leadville/alerts",
+      "webhook_url": null,
+      "email_config": {
+        "enabled": false,
+        "smtp_server": null,
+        "smtp_port": 587,
+        "username": null,
+        "password": null,
+        "from_address": null,
+        "to_addresses": []
+      }
+    },
+    "ntp_monitoring": {
+      "enabled": true,
+      "drift_threshold_ms": 100,
+      "sync_check_interval_minutes": 5
+    }
   }
 }

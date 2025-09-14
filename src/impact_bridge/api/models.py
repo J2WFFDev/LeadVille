@@ -57,6 +57,52 @@ class MetricsResponse(BaseModel):
     uptime_seconds: float = Field(..., description="Application uptime in seconds")
 
 
+class SystemMetricsResponse(BaseModel):
+    """Comprehensive system metrics response."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    timestamp: datetime = Field(..., description="Metrics collection timestamp")
+    cpu_percent: float = Field(..., description="CPU usage percentage")
+    memory_usage_mb: float = Field(..., description="Memory usage in MB")
+    memory_percent: float = Field(..., description="Memory usage percentage")
+    disk_usage_gb: float = Field(..., description="Disk usage in GB")
+    disk_percent: float = Field(..., description="Disk usage percentage")
+    disk_free_gb: float = Field(..., description="Disk free space in GB")
+    network_sent_mb: float = Field(..., description="Network data sent in MB")
+    network_recv_mb: float = Field(..., description="Network data received in MB")
+    load_average: Optional[List[float]] = Field(None, description="System load average")
+    uptime_seconds: float = Field(..., description="System uptime in seconds")
+    process_count: int = Field(..., description="Number of running processes")
+    disk_statuses: List[Dict[str, Any]] = Field(default_factory=list, description="Disk space status for monitored paths")
+    network_status: Optional[Dict[str, Any]] = Field(None, description="Network connectivity status")
+    alerts: List[str] = Field(default_factory=list, description="Active system alerts")
+    total_requests: int = Field(..., description="Total API requests processed")
+    active_connections: int = Field(..., description="Current active connections")
+
+
+class MonitoringStatusResponse(BaseModel):
+    """Monitoring system status response."""
+    
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    
+    monitoring_active: bool = Field(..., description="Whether monitoring is active")
+    last_health_check: datetime = Field(..., description="Last health check timestamp")
+    overall_status: str = Field(..., description="Overall system health status")
+    component_count: int = Field(..., description="Number of monitored components")
+    alert_count: int = Field(..., description="Number of active alerts")
+    system_uptime_seconds: float = Field(..., description="System uptime")
+    monitoring_uptime_seconds: float = Field(..., description="Monitoring system uptime")
+
+
+class LEDStatusResponse(BaseModel):
+    """LED status indicators response."""
+    
+    led_statuses: Dict[str, Dict[str, Any]] = Field(..., description="Status of all LED indicators")
+    hardware_enabled: bool = Field(..., description="Whether hardware LED control is enabled")
+    simulation_mode: bool = Field(..., description="Whether running in simulation mode")
+
+
 class ErrorResponse(BaseModel):
     """Standard error response format."""
     
