@@ -15,6 +15,7 @@ from .exceptions import setup_exception_handlers
 from .health import router as health_router
 from .metrics import router as metrics_router
 from .devices import router as devices_router
+from .scorekeeper import router as scorekeeper_router
 from .middleware import setup_middleware
 from .models import APIInfo
 from .auth.routes import router as auth_router
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
     app.include_router(metrics_router, prefix=f"/{api_config.api_version}", tags=["Metrics"])
     app.include_router(auth_router, prefix=f"/{api_config.api_version}", tags=["Authentication"])
     app.include_router(devices_router, prefix=f"/{api_config.api_version}/admin/devices", tags=["Device Management"])
+    app.include_router(scorekeeper_router, prefix=f"/{api_config.api_version}/scorekeeper", tags=["Scorekeeper Interface"])
     
     # Root endpoint with API information
     @app.get("/", response_model=APIInfo)

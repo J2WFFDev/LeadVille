@@ -171,3 +171,14 @@ def get_database_info(config: DatabaseConfig = None) -> dict:
             "file_size_mb": round(file_size / 1024 / 1024, 2),
             "tables": tables_info,
         }
+
+
+def get_db_session(config: DatabaseConfig = None) -> Generator[Session, None, None]:
+    """FastAPI dependency function for getting database sessions."""
+    SessionLocal = get_session_factory(config)
+    session = SessionLocal()
+    
+    try:
+        yield session
+    finally:
+        session.close()
