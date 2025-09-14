@@ -90,5 +90,17 @@ site/
 *.zip
 *.rar
 
+# Data Export directories (keep structure but ignore generated files)
+exports/csv/*.csv
+exports/ndjson/*.jsonl
+exports/parquet/*.parquet
+exports/archives/*.zip
+
+# Keep the export directory structure
+!exports/csv/.gitkeep
+!exports/ndjson/.gitkeep
+!exports/parquet/.gitkeep
+!exports/archives/.gitkeep
+
 # Jupyter Notebooks (if any added later)
 .ipynb_checkpoints/
