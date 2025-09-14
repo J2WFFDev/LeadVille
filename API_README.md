@@ -12,6 +12,9 @@ The LeadVille Impact Bridge FastAPI backend provides a production-ready REST API
 - **❤️ Health Check Endpoints** - Basic and detailed component health monitoring
 - **📊 System Metrics** - Real-time performance and resource utilization
 - **🔒 Security Middleware** - CORS, rate limiting, security headers, request validation
+- **🔐 JWT Authentication** - Complete authentication system with refresh tokens and RBAC
+- **👥 Role-Based Access Control** - 5 user roles (admin, ro, scorekeeper, viewer, coach)
+- **🛡️ CSRF Protection** - Token-based protection for unsafe HTTP methods
 - **📝 Structured Logging** - NDJSON format with request tracking and systemd integration
 - **⚡ Error Handling** - Comprehensive exception management with standardized responses
 - **📚 API Documentation** - Automatic OpenAPI/Swagger documentation generation
@@ -22,7 +25,6 @@ The LeadVille Impact Bridge FastAPI backend provides a production-ready REST API
 - **🗄️ SQLAlchemy Database** - Configured for connection but pending schema implementation
 - **📡 MQTT Message Bus** - Configuration ready for broker integration
 - **📱 BLE Services** - Health checks prepared for device service integration
-- **🔐 Authentication System** - Foundation ready for role-based access control
 
 ## Quick Start
 
@@ -67,13 +69,36 @@ python start_api.py --host 127.0.0.1 --port 8080 --debug
 | `GET` | `/` | API information and version |
 | `GET` | `/v1` | API version details |
 
+### Authentication
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| `POST` | `/v1/auth/login` | User login with credentials | ❌ |
+| `POST` | `/v1/auth/refresh` | Refresh access token | ❌ |
+| `POST` | `/v1/auth/logout` | User logout | ✅ |
+| `GET` | `/v1/auth/me` | Get current user info | ✅ |
+| `GET` | `/v1/auth/csrf-token` | Get CSRF protection token | ✅ |
+| `POST` | `/v1/auth/verify` | Verify token validity | ✅ |
+| `GET` | `/v1/auth/roles` | List available user roles | ❌ |
+
 ### Health & Monitoring
 
-| Method | Endpoint | Description | Response |
-|--------|----------|-------------|----------|
-| `GET` | `/v1/health` | Basic health status | `HealthStatus` |
-| `GET` | `/v1/health/detailed` | Component health details | `DetailedHealthStatus` |
-| `GET` | `/v1/metrics` | System performance metrics | `MetricsResponse` |
+| Method | Endpoint | Description | Response | Auth Required |
+|--------|----------|-------------|----------|---------------|
+| `GET` | `/v1/health` | Basic health status | `HealthStatus` | ❌ |
+| `GET` | `/v1/health/detailed` | Component health details | `DetailedHealthStatus` | ❌ |
+| `GET` | `/v1/metrics` | System performance metrics | `MetricsResponse` | ❌ |
+
+### Device Management (Admin)
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| `GET` | `/v1/admin/devices/list` | List all devices | Any authenticated |
+| `GET` | `/v1/admin/devices/health` | All device health status | Any authenticated |
+| `POST` | `/v1/admin/devices/discover` | Start BLE device discovery | Admin only |
+| `POST` | `/v1/admin/devices/pair` | Pair with BLE device | Admin only |
+| `POST` | `/v1/admin/devices/assign` | Assign device to target | Admin only |
+| `DELETE` | `/v1/admin/devices/{address}` | Remove device | Admin only |
 
 ### Example Health Response
 
@@ -152,6 +177,9 @@ The API uses Pydantic settings for type-safe configuration:
 - **🔒 CORS Protection** - Configurable origin restrictions
 - **⚡ Rate Limiting** - Per-client request throttling  
 - **🛡️ Security Headers** - XSS, content type, frame protection
+- **🔐 JWT Authentication** - Access tokens + refresh tokens with role-based access
+- **🔑 Password Security** - bcrypt hashing with salt rounds
+- **🛡️ CSRF Protection** - Token-based protection for unsafe HTTP methods
 - **🔍 Request Validation** - Automatic Pydantic model validation
 - **📝 Request Tracking** - Unique request IDs for audit trails
 
