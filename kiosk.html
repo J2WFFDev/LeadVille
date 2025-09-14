@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille Boot Status - Kiosk Mode</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 2px solid #4CAF50;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .header .subtitle {
+            font-size: 1.2em;
+            opacity: 0.8;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        .left-panel, .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .panel h2 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #4CAF50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .system-info {
+            flex: 0 0 auto;
+        }
+
+        .network-info {
+            flex: 0 0 auto;
+        }
+
+        .services-panel {
+            flex: 0 0 auto;
+        }
+
+        .logs-panel {
+            flex: 1;
+            min-height: 300px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #4CAF50;
+            min-width: 120px;
+        }
+
+        .info-value {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+            border-left: 3px solid #4CAF50;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .service-name {
+            font-weight: bold;
+        }
+
+        .status-led {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .status-running, .status-active {
+            background: #4CAF50;
+            box-shadow: 0 0 15px #4CAF50;
+        }
+
+        .status-degraded, .status-inactive {
+            background: #FFC107;
+            box-shadow: 0 0 15px #FFC107;
+        }
+
+        .status-failed, .status-unknown {
+            background: #F44336;
+            box-shadow: 0 0 15px #F44336;
+        }
+
+        .logs-container {
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            height: 100%;
+            overflow-y: auto;
+            border: 1px solid #4CAF50;
+        }
+
+        .log-line {
+            margin-bottom: 5px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .log-line:nth-child(odd) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .network-list {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #4CAF50;
+        }
+
+        .network-item {
+            margin-bottom: 5px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .timestamp {
+            position: fixed;
+            top: 10px;
+            right: 20px;
+            font-size: 0.9em;
+            opacity: 0.7;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            opacity: 0.7;
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid #F44336;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        /* Animation for status LEDs */
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .status-led {
+            animation: pulse 2s infinite;
+        }
+
+        /* Fullscreen specific styles */
+        :fullscreen {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        }
+
+        :-webkit-full-screen {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        }
+
+        :-moz-full-screen {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="timestamp" id="timestamp"></div>
+    
+    <div class="header">
+        <h1>🎯 LeadVille Impact Bridge</h1>
+        <div class="subtitle">Boot Status Screen - Kiosk Mode</div>
+    </div>
+
+    <div class="main-container">
+        <div class="left-panel">
+            <!-- System Information -->
+            <div class="panel system-info">
+                <h2>📊 System Information</h2>
+                <div class="info-grid">
+                    <div class="info-label">Node Name:</div>
+                    <div class="info-value" id="node-name">Loading...</div>
+                    
+                    <div class="info-label">Platform:</div>
+                    <div class="info-value" id="platform">Loading...</div>
+                    
+                    <div class="info-label">Python:</div>
+                    <div class="info-value" id="python-version">Loading...</div>
+                    
+                    <div class="info-label">Uptime:</div>
+                    <div class="info-value" id="uptime">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Network Information -->
+            <div class="panel network-info">
+                <h2>🌐 Network Information</h2>
+                <div class="info-grid">
+                    <div class="info-label">Mode:</div>
+                    <div class="info-value" id="network-mode">Loading...</div>
+                    
+                    <div class="info-label">SSID:</div>
+                    <div class="info-value" id="network-ssid">Loading...</div>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <div class="info-label" style="margin-bottom: 10px;">IPv4 Addresses:</div>
+                    <div class="network-list" id="ipv4-list">Loading...</div>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <div class="info-label" style="margin-bottom: 10px;">IPv6 Addresses:</div>
+                    <div class="network-list" id="ipv6-list">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Service Status -->
+            <div class="panel services-panel">
+                <h2>⚙️  Service Status</h2>
+                <div class="services-grid" id="services-grid">
+                    <div class="loading">Loading services...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <!-- System Logs -->
+            <div class="panel logs-panel">
+                <h2>📜 Recent System Logs (Last 20 lines)</h2>
+                <div class="logs-container" id="logs-container">
+                    <div class="loading">Loading logs...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let refreshInterval;
+        const API_BASE = `${window.location.protocol}//${window.location.host}/v1/kiosk`;
+
+        // Enable fullscreen mode on load
+        function enableFullscreen() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(console.error);
+            } else if (elem.mozRequestFullScreen) {
+                elem.mozRequestFullScreen().catch(console.error);
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen().catch(console.error);
+            } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen().catch(console.error);
+            }
+        }
+
+        // Update timestamp
+        function updateTimestamp() {
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        }
+
+        // Fetch and display system status
+        async function fetchStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                updateDisplay(data);
+                
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+                showError(`Failed to fetch status: ${error.message}`);
+            }
+        }
+
+        // Update the display with fetched data
+        function updateDisplay(data) {
+            // System information
+            document.getElementById('node-name').textContent = data.node_name || 'Unknown';
+            document.getElementById('platform').textContent = 
+                `${data.system?.platform || 'Unknown'} ${data.system?.release || ''}`.trim();
+            document.getElementById('python-version').textContent = data.system?.python_version || 'Unknown';
+            document.getElementById('uptime').textContent = data.system?.uptime || 'Unknown';
+
+            // Network information
+            document.getElementById('network-mode').textContent = data.network?.mode || 'Unknown';
+            document.getElementById('network-ssid').textContent = data.network?.ssid || 'N/A';
+
+            // IPv4 addresses
+            const ipv4List = document.getElementById('ipv4-list');
+            if (data.network?.ipv4 && data.network.ipv4.length > 0) {
+                ipv4List.innerHTML = data.network.ipv4
+                    .map(ip => `<div class="network-item">${ip}</div>`)
+                    .join('');
+            } else {
+                ipv4List.innerHTML = '<div class="network-item">No IPv4 addresses</div>';
+            }
+
+            // IPv6 addresses  
+            const ipv6List = document.getElementById('ipv6-list');
+            if (data.network?.ipv6 && data.network.ipv6.length > 0) {
+                ipv6List.innerHTML = data.network.ipv6
+                    .map(ip => `<div class="network-item">${ip}</div>`)
+                    .join('');
+            } else {
+                ipv6List.innerHTML = '<div class="network-item">No IPv6 addresses</div>';
+            }
+
+            // Service status
+            updateServices(data.services || {});
+
+            // Logs
+            updateLogs(data.logs || []);
+        }
+
+        // Update service status with LED indicators
+        function updateServices(services) {
+            const servicesGrid = document.getElementById('services-grid');
+            servicesGrid.innerHTML = '';
+
+            Object.entries(services).forEach(([serviceName, status]) => {
+                const serviceRow = document.createElement('div');
+                serviceRow.className = 'services-grid';
+                serviceRow.style.display = 'contents';
+
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'service-name';
+                nameDiv.textContent = serviceName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+                const statusDiv = document.createElement('div');
+                const led = document.createElement('span');
+                led.className = 'status-led';
+                
+                // Determine LED color based on status
+                if (status === 'running' || status === 'active' || status === 'ok') {
+                    led.classList.add('status-running');
+                } else if (status === 'degraded' || status === 'inactive') {
+                    led.classList.add('status-degraded');
+                } else {
+                    led.classList.add('status-failed');
+                }
+                
+                statusDiv.appendChild(led);
+                statusDiv.appendChild(document.createTextNode(` ${status}`));
+
+                servicesGrid.appendChild(nameDiv);
+                servicesGrid.appendChild(statusDiv);
+            });
+        }
+
+        // Update logs display
+        function updateLogs(logs) {
+            const logsContainer = document.getElementById('logs-container');
+            
+            if (logs.length === 0) {
+                logsContainer.innerHTML = '<div class="log-line">No recent logs available</div>';
+                return;
+            }
+
+            logsContainer.innerHTML = logs
+                .map(log => `<div class="log-line">${escapeHtml(log)}</div>`)
+                .join('');
+            
+            // Auto-scroll to bottom
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        // Show error message
+        function showError(message) {
+            const container = document.querySelector('.main-container');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.innerHTML = `<strong>Error:</strong> ${escapeHtml(message)}`;
+            
+            // Remove existing error messages
+            const existingErrors = container.querySelectorAll('.error');
+            existingErrors.forEach(error => error.remove());
+            
+            container.insertBefore(errorDiv, container.firstChild);
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Start the application
+        function init() {
+            // Enable fullscreen
+            setTimeout(enableFullscreen, 1000);
+            
+            // Update timestamp immediately and every second
+            updateTimestamp();
+            setInterval(updateTimestamp, 1000);
+            
+            // Fetch status immediately and every 2 seconds
+            fetchStatus();
+            refreshInterval = setInterval(fetchStatus, 2000);
+            
+            // Handle visibility change to restart refresh when page becomes visible
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    fetchStatus();
+                    if (refreshInterval) clearInterval(refreshInterval);
+                    refreshInterval = setInterval(fetchStatus, 2000);
+                }
+            });
+
+            // Handle fullscreen exit - try to re-enter
+            document.addEventListener('fullscreenchange', () => {
+                if (!document.fullscreenElement) {
+                    setTimeout(enableFullscreen, 2000);
+                }
+            });
+
+            // Handle keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'F11') {
+                    e.preventDefault();
+                    enableFullscreen();
+                } else if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+                    e.preventDefault();
+                    location.reload();
+                }
+            });
+        }
+
+        // Start when page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
