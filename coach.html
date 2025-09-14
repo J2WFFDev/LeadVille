@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille - Coach Interface</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>LeadVille Coach Interface</h1>
+            <p>Match Analysis & Notes</p>
+            <div class="view-controls">
+                <nav class="view-nav">
+                    <a href="index.html" class="nav-link">System Monitor</a>
+                    <a href="spectator.html" class="nav-link">Spectator</a>
+                    <a href="coach.html" class="nav-link active">Coach</a>
+                </nav>
+                <div class="coach-controls">
+                    <button id="export-notes" class="btn btn-export">Export Notes</button>
+                    <button id="share-notes" class="btn btn-share">Share</button>
+                </div>
+            </div>
+        </header>
+        
+        <main>
+            <!-- Current Run Info -->
+            <div class="current-run-panel">
+                <h2>Current Run</h2>
+                <div class="run-details">
+                    <div class="run-detail">
+                        <label>Shooter:</label>
+                        <select id="shooter-select">
+                            <option value="">Select Shooter...</option>
+                            <option value="1">J. Smith (#42)</option>
+                            <option value="2">M. Johnson (#15)</option>
+                            <option value="3">K. Williams (#23)</option>
+                        </select>
+                    </div>
+                    <div class="run-detail">
+                        <label>Stage:</label>
+                        <span id="current-stage">Stage 1 - Speed Steel Challenge</span>
+                    </div>
+                    <div class="run-detail">
+                        <label>Start Time:</label>
+                        <span id="run-start-time">14:25:30</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="coach-dashboard">
+                <!-- Live Performance -->
+                <div class="performance-panel">
+                    <h2>Live Performance</h2>
+                    <div class="performance-display">
+                        <div class="timing-stats">
+                            <div class="stat-item">
+                                <label>Current Time:</label>
+                                <span id="current-time" class="time-display">02:34.56</span>
+                            </div>
+                            <div class="stat-item">
+                                <label>Target Rate:</label>
+                                <span id="target-rate">1.2 tgt/sec</span>
+                            </div>
+                            <div class="stat-item">
+                                <label>Accuracy:</label>
+                                <span id="accuracy">85%</span>
+                            </div>
+                        </div>
+                        <div class="bookmark-controls">
+                            <button id="bookmark-moment" class="btn btn-bookmark">
+                                📌 Bookmark Moment
+                            </button>
+                            <span id="bookmark-status"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Coach Notes -->
+                <div class="notes-panel">
+                    <h2>Coach Notes</h2>
+                    <div class="notes-editor">
+                        <div class="note-controls">
+                            <label for="note-category">Category:</label>
+                            <select id="note-category">
+                                <option value="technique">Technique</option>
+                                <option value="timing">Timing</option>
+                                <option value="accuracy">Accuracy</option>
+                                <option value="strategy">Strategy</option>
+                                <option value="equipment">Equipment</option>
+                                <option value="general">General</option>
+                            </select>
+                            <label class="timestamp-checkbox">
+                                <input type="checkbox" id="auto-timestamp" checked>
+                                Auto-timestamp
+                            </label>
+                        </div>
+                        <textarea 
+                            id="note-text" 
+                            placeholder="Enter coaching notes... (e.g., 'Good transition at 1:45, focus on sight picture')"
+                            rows="4"
+                            maxlength="500"
+                        ></textarea>
+                        <div class="note-actions">
+                            <button id="save-note" class="btn btn-primary">Save Note</button>
+                            <button id="quick-note" class="btn btn-secondary">Quick Note</button>
+                            <span class="char-count">0/500</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notes History -->
+            <div class="notes-history-panel">
+                <h2>Session Notes & Bookmarks</h2>
+                <div class="notes-history">
+                    <div class="history-controls">
+                        <select id="notes-filter">
+                            <option value="all">All Notes</option>
+                            <option value="technique">Technique</option>
+                            <option value="timing">Timing</option>
+                            <option value="accuracy">Accuracy</option>
+                            <option value="bookmarks">Bookmarks Only</option>
+                        </select>
+                        <button id="clear-notes" class="btn btn-warning">Clear Session</button>
+                    </div>
+                    <div class="notes-list" id="notes-list">
+                        <div class="note-item bookmark">
+                            <div class="note-header">
+                                <span class="note-time">14:27:45</span>
+                                <span class="note-category technique">Technique</span>
+                                <span class="bookmark-indicator">📌</span>
+                            </div>
+                            <div class="note-content">
+                                Excellent draw and first shot. Maintain this grip pressure throughout the stage.
+                            </div>
+                            <div class="note-actions">
+                                <button class="btn-edit">Edit</button>
+                                <button class="btn-delete">Delete</button>
+                            </div>
+                        </div>
+                        <div class="note-item">
+                            <div class="note-header">
+                                <span class="note-time">14:28:12</span>
+                                <span class="note-category timing">Timing</span>
+                            </div>
+                            <div class="note-content">
+                                Slight hesitation between targets 3-4. Work on smoother transitions.
+                            </div>
+                            <div class="note-actions">
+                                <button class="btn-edit">Edit</button>
+                                <button class="btn-delete">Delete</button>
+                            </div>
+                        </div>
+                        <div class="note-item">
+                            <div class="note-header">
+                                <span class="note-time">14:28:45</span>
+                                <span class="note-category accuracy">Accuracy</span>
+                            </div>
+                            <div class="note-content">
+                                Good sight alignment on long shots. Consider adjusting stance for better stability.
+                            </div>
+                            <div class="note-actions">
+                                <button class="btn-edit">Edit</button>
+                                <button class="btn-delete">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stage Summary -->
+            <div class="stage-summary-panel">
+                <h2>Stage Summary</h2>
+                <div class="summary-stats">
+                    <div class="summary-item">
+                        <label>Total Notes:</label>
+                        <span id="total-notes">3</span>
+                    </div>
+                    <div class="summary-item">
+                        <label>Bookmarks:</label>
+                        <span id="total-bookmarks">1</span>
+                    </div>
+                    <div class="summary-item">
+                        <label>Session Duration:</label>
+                        <span id="session-duration">45 minutes</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="coach-footer">
+            <p>LeadVille Impact Bridge - Coach Interface | Session: <span id="session-id">COACH-001</span></p>
+        </footer>
+    </div>
+
+    <script src="coach.js"></script>
+</body>
+</html>
