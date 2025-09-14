@@ -117,6 +117,36 @@
     "db_path": "timer_events.db",
     "json_backup_path": "logs/timer_events_backup.jsonl"
   },
+  "data_export": {
+    "enabled": true,
+    "export_dir": "exports",
+    "auto_export": {
+      "enabled": false,
+      "interval_hours": 24,
+      "formats": ["csv", "ndjson"]
+    },
+    "formats": {
+      "csv": {
+        "enabled": true,
+        "include_debug": false
+      },
+      "ndjson": {
+        "enabled": true,
+        "schema_version": "1.0.0",
+        "include_raw_data": true
+      },
+      "parquet": {
+        "enabled": true,
+        "compression": "gzip",
+        "partition_by": null
+      }
+    },
+    "offload": {
+      "auto_offload": false,
+      "retention_days": 30,
+      "delete_after_offload": false
+    }
+  },
   "simulation": {
     "mode": "multi_shot",
     "num_shots": 5,
