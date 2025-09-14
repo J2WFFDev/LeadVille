@@ -1,0 +1,30 @@
+[Unit]
+Description=LeadVille Impact Bridge - WebSocket Server
+Documentation=https://github.com/J2WFFDev/LeadVille
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=leadville
+Group=leadville
+WorkingDirectory=/opt/leadville
+Environment=PATH=/opt/leadville/venv/bin
+Environment=PYTHONPATH=/opt/leadville/src
+ExecStart=/opt/leadville/venv/bin/python -m impact_bridge.websocket_integration
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=leadville-websocket
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/leadville/logs /var/log/leadville
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
