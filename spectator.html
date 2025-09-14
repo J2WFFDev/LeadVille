@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille - Spectator View</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>LeadVille Spectator View</h1>
+            <p>Live Match Dashboard - Read Only</p>
+            <div class="view-controls">
+                <nav class="view-nav">
+                    <a href="index.html" class="nav-link">System Monitor</a>
+                    <a href="spectator.html" class="nav-link active">Spectator</a>
+                    <a href="coach.html" class="nav-link">Coach</a>
+                </nav>
+                <div class="privacy-controls">
+                    <label class="privacy-toggle">
+                        <input type="checkbox" id="privacy-mode" checked>
+                        <span class="toggle-slider"></span>
+                        Privacy Mode
+                    </label>
+                </div>
+            </div>
+        </header>
+        
+        <main>
+            <!-- Live Match Status -->
+            <div class="match-status-panel">
+                <h2>Match Status</h2>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <label>Current Stage:</label>
+                        <span id="current-stage">Stage 1</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Active Shooter:</label>
+                        <span id="active-shooter">Shooter 42</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Timer Status:</label>
+                        <span id="timer-status" class="status running">Running</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Elapsed Time:</label>
+                        <span id="elapsed-time">02:34.56</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Data Dashboard -->
+            <div class="dashboard">
+                <!-- Recent Impacts -->
+                <div class="impacts-panel">
+                    <h2>Recent Impacts</h2>
+                    <div class="impacts-display">
+                        <div class="impact-list" id="impact-list">
+                            <div class="impact-item">
+                                <span class="impact-time">02:15.23</span>
+                                <span class="impact-target">Target A1</span>
+                                <span class="impact-zone">Alpha</span>
+                            </div>
+                            <div class="impact-item">
+                                <span class="impact-time">01:42.17</span>
+                                <span class="impact-target">Target B2</span>
+                                <span class="impact-zone">Charlie</span>
+                            </div>
+                            <div class="impact-item">
+                                <span class="impact-time">01:18.05</span>
+                                <span class="impact-target">Target A3</span>
+                                <span class="impact-zone">Alpha</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Leaderboard -->
+                <div class="leaderboard-panel">
+                    <h2>Stage Leaderboard</h2>
+                    <div class="leaderboard-display">
+                        <div class="leaderboard-list" id="leaderboard-list">
+                            <div class="leaderboard-item position-1">
+                                <span class="position">1</span>
+                                <span class="shooter-name">J. Smith</span>
+                                <span class="time">156.23</span>
+                                <span class="score">A-Class</span>
+                            </div>
+                            <div class="leaderboard-item position-2">
+                                <span class="position">2</span>
+                                <span class="shooter-name">M. Johnson</span>
+                                <span class="time">162.45</span>
+                                <span class="score">A-Class</span>
+                            </div>
+                            <div class="leaderboard-item position-3">
+                                <span class="position">3</span>
+                                <span class="shooter-name">K. Williams</span>
+                                <span class="time">168.89</span>
+                                <span class="score">B-Class</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stage Information -->
+            <div class="stage-info-panel">
+                <h2>Stage Information</h2>
+                <div class="stage-details">
+                    <div class="stage-detail">
+                        <label>Stage Name:</label>
+                        <span id="stage-name">Speed Steel Challenge</span>
+                    </div>
+                    <div class="stage-detail">
+                        <label>Target Count:</label>
+                        <span id="target-count">6 targets</span>
+                    </div>
+                    <div class="stage-detail">
+                        <label>Course of Fire:</label>
+                        <span id="course-fire">6 rounds minimum, freestyle</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Status (Read-only) -->
+            <div class="spectator-system-status">
+                <h3>System Status</h3>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <label>Sensors:</label>
+                        <span id="spectator-sensor-status" class="status connected">Connected</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Timer:</label>
+                        <span id="spectator-timer-status" class="status connected">Connected</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Data Quality:</label>
+                        <span id="data-quality" class="status active">Excellent</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="spectator-footer">
+            <p>LeadVille Impact Bridge - Spectator Dashboard | Last Update: <span id="last-update">--:--:--</span></p>
+        </footer>
+    </div>
+
+    <script src="spectator.js"></script>
+</body>
+</html>

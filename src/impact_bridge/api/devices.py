@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 
 from ..device_manager import DeviceManager
+from .auth.dependencies import require_admin, get_current_active_user
+from .auth.models import User
 from .models import (
     DeviceDiscoveryRequest,
     DeviceDiscoveryResponse,
@@ -45,7 +47,8 @@ async def get_device_manager() -> DeviceManager:
              description="Start BLE device discovery scan to find nearby devices.")
 async def discover_devices(
     request: DeviceDiscoveryRequest,
-    manager: DeviceManager = Depends(get_device_manager)
+    manager: DeviceManager = Depends(get_device_manager),
+    current_user: User = Depends(require_admin)
 ) -> DeviceDiscoveryResponse:
     """Discover nearby BLE devices."""
     try:
@@ -96,7 +99,8 @@ async def discover_devices(
              description="Attempt to pair/connect with a specific BLE device.")
 async def pair_device(
     request: DevicePairRequest,
-    manager: DeviceManager = Depends(get_device_manager)
+    manager: DeviceManager = Depends(get_device_manager),
+    current_user: User = Depends(require_admin)
 ) -> DevicePairResponse:
     """Pair with a BLE device."""
     try:
@@ -127,7 +131,8 @@ async def pair_device(
              description="Assign a paired device to a specific target.")
 async def assign_device(
     request: DeviceAssignRequest,
-    manager: DeviceManager = Depends(get_device_manager)
+    manager: DeviceManager = Depends(get_device_manager),
+    current_user: User = Depends(require_admin)
 ) -> DeviceAssignResponse:
     """Assign a device to a target."""
     try:
@@ -162,7 +167,8 @@ async def assign_device(
              description="Remove device assignment from its current target.")
 async def unassign_device(
     request: DeviceUnassignRequest,
-    manager: DeviceManager = Depends(get_device_manager)
+    manager: DeviceManager = Depends(get_device_manager),
+    current_user: User = Depends(require_admin)
 ) -> DeviceUnassignResponse:
     """Unassign a device from its target."""
     try:
@@ -195,7 +201,8 @@ async def unassign_device(
             summary="List all devices",
             description="Get list of all known devices with their status.")
 async def list_devices(
-    manager: DeviceManager = Depends(get_device_manager)
+    manager: DeviceManager = Depends(get_device_manager),
+    current_user: User = Depends(get_current_active_user)
 ) -> DeviceListResponse:
     """Get list of all known devices."""
     try:
@@ -229,7 +236,8 @@ async def list_devices(
             description="Get health status for a specific device.")
 async def get_device_health(
     address: str,
-    manager: DeviceManager = Depends(get_device_manager)
+    manager: DeviceManager = Depends(get_device_manager),
+    current_user: User = Depends(get_current_active_user)
 ) -> DeviceHealthStatus:
     """Get health status for a specific device."""
     try:
@@ -269,7 +277,8 @@ async def get_device_health(
             summary="Get all device health statuses",
             description="Get health status for all monitored devices.")
 async def get_all_device_health(
-    manager: DeviceManager = Depends(get_device_manager)
+    manager: DeviceManager = Depends(get_device_manager),
+    current_user: User = Depends(get_current_active_user)
 ) -> List[DeviceHealthStatus]:
     """Get health status for all devices."""
     try:
@@ -307,7 +316,8 @@ async def get_all_device_health(
              description="Start or stop device health monitoring.")
 async def control_health_monitoring(
     request: DeviceHealthMonitoringRequest,
-    manager: DeviceManager = Depends(get_device_manager)
+    manager: DeviceManager = Depends(get_device_manager),
+    current_user: User = Depends(require_admin)
 ) -> DeviceHealthMonitoringResponse:
     """Start or stop device health monitoring."""
     try:
@@ -341,7 +351,8 @@ async def control_health_monitoring(
                description="Remove a device from the system.")
 async def remove_device(
     address: str,
-    manager: DeviceManager = Depends(get_device_manager)
+    manager: DeviceManager = Depends(get_device_manager),
+    current_user: User = Depends(require_admin)
 ):
     """Remove a device from the system."""
     try:
