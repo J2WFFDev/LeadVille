@@ -111,6 +111,38 @@ class SensorConfig:
 
 
 @dataclass
+class DataExportConfig:
+    """Configuration for data export and analytics."""
+    
+    enabled: bool = True
+    export_dir: str = "exports"
+    auto_export_enabled: bool = False
+    auto_export_interval_hours: int = 24
+    auto_export_formats: List[str] = None
+    
+    # Format-specific settings
+    csv_enabled: bool = True
+    csv_include_debug: bool = False
+    
+    ndjson_enabled: bool = True
+    ndjson_schema_version: str = "1.0.0"
+    ndjson_include_raw_data: bool = True
+    
+    parquet_enabled: bool = True
+    parquet_compression: str = "gzip"
+    parquet_partition_by: Optional[str] = None
+    
+    # Offload settings
+    auto_offload: bool = False
+    retention_days: int = 30
+    delete_after_offload: bool = False
+    
+    def __post_init__(self) -> None:
+        if self.auto_export_formats is None:
+            self.auto_export_formats = ["csv", "ndjson"]
+
+
+@dataclass
 class AppConfig:
     """Main application configuration."""
     
@@ -120,6 +152,7 @@ class AppConfig:
     logging: LoggingConfig = None
     database: DatabaseConfig = None
     mqtt: MqttConfig = None
+    data_export: DataExportConfig = None
     
     def __post_init__(self) -> None:
         if self.sensors is None:
@@ -132,6 +165,8 @@ class AppConfig:
             self.database = DatabaseConfig()
         if self.mqtt is None:
             self.mqtt = MqttConfig()
+        if self.data_export is None:
+            self.data_export = DataExportConfig()
 
 
 def load_config(config_path: str) -> AppConfig:
