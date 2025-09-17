@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Socket.IO Connection Test</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Socket.IO Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="logs"></div>
+    
+    <script>
+        const statusDiv = document.getElementById('status');
+        const logsDiv = document.getElementById('logs');
+        
+        function log(message) {
+            console.log(message);
+            logsDiv.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + message + '</div>';
+        }
+        
+        log('🔌 Starting Socket.IO connection test...');
+        
+        // Test 1: Connect to main Socket.IO server
+        log('📡 Testing main Socket.IO connection...');
+        const mainSocket = io('http://192.168.1.124:8001', {
+            transports: ['polling', 'websocket'],
+            timeout: 5000
+        });
+        
+        mainSocket.on('connect', () => {
+            log('✅ Main Socket.IO connected! ID: ' + mainSocket.id);
+            statusDiv.innerHTML = 'Main connection: SUCCESS';
+            
+            // Test 2: Connect to /ws/logs namespace
+            log('📝 Testing /ws/logs namespace connection...');
+            const logsSocket = io('http://192.168.1.124:8001/ws/logs', {
+                transports: ['polling', 'websocket'],
+                timeout: 5000
+            });
+            
+            logsSocket.on('connect', () => {
+                log('✅ Logs namespace connected! ID: ' + logsSocket.id);
+                statusDiv.innerHTML = 'Namespace connection: SUCCESS';
+                
+                // Test 3: Request logs
+                log('📋 Requesting logs...');
+                logsSocket.emit('request_logs', { limit: 3 });
+            });
+            
+            logsSocket.on('log_entry', (data) => {
+                log('📋 Received log: ' + JSON.stringify(data));
+            });
+            
+            logsSocket.on('connect_error', (error) => {
+                log('❌ Namespace connection error: ' + error.message);
+                statusDiv.innerHTML = 'Namespace connection: FAILED - ' + error.message;
+            });
+            
+            logsSocket.on('disconnect', (reason) => {
+                log('⚠️ Namespace disconnected: ' + reason);
+            });
+        });
+        
+        mainSocket.on('connect_error', (error) => {
+            log('❌ Main connection error: ' + error.message);
+            statusDiv.innerHTML = 'Main connection: FAILED - ' + error.message;
+        });
+        
+        mainSocket.on('disconnect', (reason) => {
+            log('⚠️ Main disconnected: ' + reason);
+        });
+        
+    </script>
+</body>
+</html>

@@ -45,6 +45,12 @@ class DatabaseConfig:
     dir: str = "./db"
     file: str = "bridge.db"
     enable_ingest: bool = True
+    echo: bool = False  # SQLAlchemy echo for debugging
+    
+    @property
+    def path(self) -> str:
+        """Get full database path"""
+        return os.path.join(self.dir, self.file)
 
 
 @dataclass

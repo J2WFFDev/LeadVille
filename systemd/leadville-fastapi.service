@@ -1,0 +1,30 @@
+[Unit]
+Description=LeadVille FastAPI Backend Server
+After=network.target leadville-bridge.service
+Wants=leadville-bridge.service
+PartOf=leadville.target
+
+[Service]
+Type=exec
+User=jrwest
+Group=jrwest
+WorkingDirectory=/home/jrwest/projects/LeadVille
+Environment=PATH=/home/jrwest/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONPATH=/home/jrwest/projects/LeadVille/src
+ExecStart=/usr/bin/python3 /home/jrwest/projects/LeadVille/scripts/start_fastapi.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=leadville.target
