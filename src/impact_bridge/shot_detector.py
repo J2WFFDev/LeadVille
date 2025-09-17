@@ -1,190 +1,189 @@
 """
-Shot Detection System
-
-Advanced shot detection with configurable thresholds, duration validation,
-and interval enforcement for BT50 sensor data.
+Real-time shot detection for BT50 sensor data.
+Based on analysis showing 6 shots with 150 count threshold and 6-11 sample duration.
 """
-
 import time
-import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
-from datetime import datetime, timezone
-
-logger = logging.getLogger(__name__)
+import logging
 
 @dataclass
-class DetectedShot:
+class ShotEvent:
     """Represents a detected shot event"""
-    timestamp: datetime
-    peak_magnitude: float
+    shot_id: int
+    start_sample: int
+    end_sample: int
     duration_samples: int
-    baseline_deviation: float
-    sample_data: List[Dict]
-
+    max_deviation: int
+    timestamp: float
+    x_values: List[int]  # Raw X values during the shot
+    
+    @property
+    def duration_ms(self) -> float:
+        """Duration in milliseconds (assuming 50Hz sampling)"""
+        return self.duration_samples * 20.0  # 20ms per sample at 50Hz
+    
+    @property
+    def timestamp_str(self) -> str:
+        """Human readable timestamp"""
+        return time.strftime('%H:%M:%S.%f', time.localtime(self.timestamp))[:-3]
 
 class ShotDetector:
     """
-    Advanced shot detection with baseline calibration and validation
+    Real-time shot detection for BT50 sensor data
+    
+    Validated criteria:
+    - X-axis deviation > 150 counts from baseline (2089)
+    - Duration: 6-11 consecutive samples (120-220ms at 50Hz)
+    - Minimum 1 second interval between shots
     """
     
     def __init__(self, 
-                 baseline_x: int = 0,
-                 threshold: float = 150.0,
+                 baseline_x: int = 2089,
+                 threshold: int = 150,
                  min_duration: int = 6,
-                 max_duration: int = 11, 
-                 min_interval_seconds: float = 1.0):
+                 max_duration: int = 11,
+                 min_interval_seconds: float = 1.0,
+                 sampling_rate_hz: float = 50.0):
         """
         Initialize shot detector
         
         Args:
-            baseline_x: Calibrated baseline for X-axis
-            threshold: Minimum change from baseline to detect shot
-            min_duration: Minimum samples for valid shot
-            max_duration: Maximum samples for valid shot
-            min_interval_seconds: Minimum time between shots
+            baseline_x: Expected baseline X value (2089 from calibration)
+            threshold: Minimum deviation from baseline to trigger detection (150 counts)
+            min_duration: Minimum consecutive samples for valid shot (6)
+            max_duration: Maximum consecutive samples for valid shot (11)
+            min_interval_seconds: Minimum time between shots (1.0s)
+            sampling_rate_hz: BT50 sampling rate (50Hz)
         """
         self.baseline_x = baseline_x
         self.threshold = threshold
         self.min_duration = min_duration
         self.max_duration = max_duration
         self.min_interval_seconds = min_interval_seconds
+        self.sampling_rate_hz = sampling_rate_hz
         
-        # Detection state
-        self.last_shot_time = 0
-        self.detection_active = False
-        self.current_detection = []
+        # State tracking
+        self.sample_count = 0
+        self.shot_count = 0
+        self.in_shot = False
+        self.shot_start_sample = 0
+        self.shot_values: List[int] = []
+        self.last_shot_time = 0.0
         
-        # Statistics
-        self.total_samples = 0
-        self.total_shots = 0
+        # History for validation
+        self.recent_shots: List[ShotEvent] = []
+        
+        self.logger = logging.getLogger(__name__)
+        
+    def reset(self):
+        """Reset detector state"""
+        self.sample_count = 0
+        self.shot_count = 0
+        self.in_shot = False
+        self.shot_start_sample = 0
+        self.shot_values = []
+        self.last_shot_time = 0.0
         self.recent_shots = []
-        self.start_time = time.time()
         
-        logger.info(f"Shot detector initialized: threshold={threshold}, "
-                   f"duration={min_duration}-{max_duration}, interval={min_interval_seconds}s")
-    
-    def process_samples(self, samples: List[Dict]) -> List[DetectedShot]:
+    def process_sample(self, x_raw: int, timestamp: Optional[float] = None) -> Optional[ShotEvent]:
         """
-        Process sensor samples and detect shots
+        Process a single BT50 X-axis sample and detect shots
         
         Args:
-            samples: List of parsed sensor samples
+            x_raw: Raw X-axis count from BT50 sensor
+            timestamp: Sample timestamp (uses current time if None)
             
         Returns:
-            List of detected shots (usually 0 or 1)
+            ShotEvent if shot completed, None otherwise
         """
-        detected_shots = []
+        if timestamp is None:
+            timestamp = time.time()
+            
+        self.sample_count += 1
+        deviation = abs(x_raw - self.baseline_x)
         
-        for sample in samples:
-            self.total_samples += 1
-            shot = self._process_single_sample(sample)
-            if shot:
-                detected_shots.append(shot)
-                
-        return detected_shots
-    
-    def _process_single_sample(self, sample: Dict) -> Optional[DetectedShot]:
-        """Process a single sample for shot detection"""
-        current_time = time.time()
-        
-        # Calculate deviation from baseline
-        vx_raw = sample['vx_raw']
-        deviation = abs(vx_raw - self.baseline_x)
-        
-        # Check if sample exceeds threshold
+        # Check if this sample exceeds threshold
         exceeds_threshold = deviation >= self.threshold
         
-        # State machine for detection
-        if exceeds_threshold and not self.detection_active:
-            # Start new detection if enough time has passed
-            if current_time - self.last_shot_time >= self.min_interval_seconds:
-                self.detection_active = True
-                self.current_detection = [sample]
-                logger.debug(f"Shot detection started: deviation={deviation}")
+        if not self.in_shot and exceeds_threshold:
+            # Start of potential shot
+            # Check minimum interval since last shot
+            if timestamp - self.last_shot_time >= self.min_interval_seconds:
+                self.in_shot = True
+                self.shot_start_sample = self.sample_count
+                self.shot_values = [x_raw]
+                self.logger.debug(f"Shot start at sample {self.sample_count}, deviation: {deviation}")
             else:
-                logger.debug(f"Shot ignored due to interval: {current_time - self.last_shot_time:.3f}s")
+                self.logger.debug(f"Shot rejected - too soon after last shot ({timestamp - self.last_shot_time:.1f}s)")
                 
-        elif self.detection_active:
-            self.current_detection.append(sample)
+        elif self.in_shot and exceeds_threshold:
+            # Continue existing shot
+            self.shot_values.append(x_raw)
             
-            # Check if we should end detection
-            if not exceeds_threshold or len(self.current_detection) >= self.max_duration:
-                return self._finalize_detection(current_time)
+            # Check for maximum duration exceeded
+            duration = len(self.shot_values)
+            if duration > self.max_duration:
+                self.logger.debug(f"Shot rejected - too long ({duration} samples)")
+                self._reset_shot_state()
                 
+        elif self.in_shot and not exceeds_threshold:
+            # End of shot - validate and create event
+            duration = len(self.shot_values)
+            
+            if duration >= self.min_duration:
+                # Valid shot detected!
+                self.shot_count += 1
+                max_deviation = max(abs(x - self.baseline_x) for x in self.shot_values)
+                
+                shot_event = ShotEvent(
+                    shot_id=self.shot_count,
+                    start_sample=self.shot_start_sample,
+                    end_sample=self.shot_start_sample + duration - 1,
+                    duration_samples=duration,
+                    max_deviation=max_deviation,
+                    timestamp=timestamp,
+                    x_values=self.shot_values.copy()
+                )
+                
+                self.recent_shots.append(shot_event)
+                self.last_shot_time = timestamp
+                
+                # Keep only last 10 shots in memory
+                if len(self.recent_shots) > 10:
+                    self.recent_shots.pop(0)
+                    
+                self.logger.info(f"Shot {self.shot_count} detected: "
+                               f"samples {shot_event.start_sample}-{shot_event.end_sample}, "
+                               f"duration {duration}, max deviation {max_deviation}")
+                
+                self._reset_shot_state()
+                return shot_event
+            else:
+                self.logger.debug(f"Shot rejected - too short ({duration} samples)")
+                self._reset_shot_state()
+        
+        # No shot event
         return None
     
-    def _finalize_detection(self, current_time: float) -> Optional[DetectedShot]:
-        """Finalize current detection and determine if it's a valid shot"""
-        try:
-            duration = len(self.current_detection)
-            
-            # Validate duration
-            if duration < self.min_duration:
-                logger.debug(f"Shot rejected: too short ({duration} samples)")
-                self.detection_active = False
-                return None
-            
-            # Calculate shot characteristics
-            peak_magnitude = 0
-            total_deviation = 0
-            
-            for sample in self.current_detection:
-                deviation = abs(sample['vx_raw'] - self.baseline_x)
-                peak_magnitude = max(peak_magnitude, deviation)
-                total_deviation += deviation
-                
-            avg_deviation = total_deviation / duration
-            
-            # Create detected shot
-            shot = DetectedShot(
-                timestamp=datetime.now(timezone.utc),
-                peak_magnitude=peak_magnitude,
-                duration_samples=duration,
-                baseline_deviation=avg_deviation,
-                sample_data=self.current_detection.copy()
-            )
-            
-            # Update statistics
-            self.total_shots += 1
-            self.last_shot_time = current_time
-            self.recent_shots.append(shot)
-            
-            # Keep only recent shots (last 10)
-            if len(self.recent_shots) > 10:
-                self.recent_shots.pop(0)
-            
-            logger.info(f"Shot #{self.total_shots} detected: "
-                       f"peak={peak_magnitude:.1f}, duration={duration}, avg_dev={avg_deviation:.1f}")
-            
-            return shot
-            
-        finally:
-            self.detection_active = False
-            self.current_detection = []
+    def _reset_shot_state(self):
+        """Reset current shot tracking state"""
+        self.in_shot = False
+        self.shot_start_sample = 0
+        self.shot_values = []
     
-    def get_stats(self) -> Dict:
-        """Get detection statistics"""
-        runtime = time.time() - self.start_time
-        shots_per_minute = (self.total_shots / runtime * 60) if runtime > 0 else 0
-        
+    def get_stats(self) -> Dict[str, Any]:
+        """Get detector statistics"""
         return {
-            'total_shots': self.total_shots,
-            'total_samples': self.total_samples,
-            'runtime_seconds': runtime,
-            'shots_per_minute': shots_per_minute,
-            'baseline_x': self.baseline_x,
-            'threshold': self.threshold
+            'total_samples': self.sample_count,
+            'total_shots': self.shot_count,
+            'shots_per_minute': self.shot_count / (self.sample_count / self.sampling_rate_hz / 60) if self.sample_count > 0 else 0,
+            'current_baseline': self.baseline_x,
+            'threshold': self.threshold,
+            'recent_shots': len(self.recent_shots),
+            'last_shot_time': self.last_shot_time
         }
     
-    def get_recent_shots(self) -> List[DetectedShot]:
-        """Get list of recently detected shots"""
-        return self.recent_shots.copy()
-    
-    def reset_statistics(self):
-        """Reset all statistics and recent shots"""
-        self.total_samples = 0
-        self.total_shots = 0
-        self.recent_shots = []
-        self.start_time = time.time()
-        logger.info("Shot detector statistics reset")
+    def get_recent_shots(self, count: int = 5) -> List[ShotEvent]:
+        """Get the most recent shot events"""
+        return self.recent_shots[-count:] if self.recent_shots else []
