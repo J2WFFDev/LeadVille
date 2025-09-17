@@ -1,12 +1,12 @@
 {
   "enhanced_impact": {
     "enabled": true,
-    "peak_threshold": 150.0,
-    "onset_threshold": 30.0,
+    "peak_threshold": 10.0,
+    "onset_threshold": 3.0,
     "lookback_samples": 10
   },
   "shot_detection": {
-    "threshold": 150.0,
+    "threshold": 10.0,
     "min_duration": 6,
     "max_duration": 11,
     "min_interval_seconds": 1.0

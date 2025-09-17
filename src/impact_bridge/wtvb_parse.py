@@ -42,27 +42,21 @@ def parse_5561(data: bytes) -> Optional[Dict[str, Any]]:
                 ay_raw = struct.unpack('<h', data[i+2:i+4])[0] 
                 az_raw = struct.unpack('<h', data[i+4:i+6])[0]
                 
-                # Convert to mg (1mg scale factor - corrected from previous 0.061mg)
-                # Raw values are already in mg units
-                ax_mg = ax_raw * 1.0  # 1mg per count
-                ay_mg = ay_raw * 1.0
-                az_mg = az_raw * 1.0
-                
-                # Convert to g units (divide by 1000)
-                ax_g = ax_mg / 1000.0
-                ay_g = ay_mg / 1000.0
-                az_g = az_mg / 1000.0
+                # BT50 scale factor: Calibrated based on gravity reference  
+                # Match TinTown's calibration: scale = 0.000902
+                scale = 0.000902
+                vx = ax_raw * scale
+                vy = ay_raw * scale  
+                vz = az_raw * scale
                 
                 sample = {
-                    'vx_raw': ax_raw,
+                    'vx': vx,           # TinTown compatible scaled values
+                    'vy': vy,
+                    'vz': vz,
+                    'vx_raw': ax_raw,   # Keep raw for debugging
                     'vy_raw': ay_raw, 
                     'vz_raw': az_raw,
-                    'vx_mg': ax_mg,
-                    'vy_mg': ay_mg,
-                    'vz_mg': az_mg,
-                    'vx_g': ax_g,
-                    'vy_g': ay_g,
-                    'vz_g': az_g,
+                    'raw': (ax_raw, ay_raw, az_raw),  # TinTown format
                 }
                 samples.append(sample)
         
