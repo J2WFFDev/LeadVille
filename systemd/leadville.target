@@ -1,0 +1,7 @@
+[Unit]
+Description=LeadVille Complete System Target
+Wants=leadville-bridge.service leadville-fastapi.service leadville-frontend.service
+After=network.target
+
+[Install]
+WantedBy=multi-user.target

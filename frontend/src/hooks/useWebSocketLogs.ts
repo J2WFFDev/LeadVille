@@ -1,9 +1,8 @@
 /**
- * Custom hook for WebSocket log streaming using Socket.IO
+ * Custom hook for WebSocket log streaming using native WebSocket
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
 
 interface LogEntry {
   timestamp: string;
@@ -28,7 +27,7 @@ export const useWebSocketLogs = (maxLines: number = 1000): UseWebSocketLogsRetur
   const [connectionStatus, setConnectionStatus] = useState<string>('Disconnected');
   const [isPaused, setIsPaused] = useState<boolean>(false);
   
-  const socketRef = useRef<Socket | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
 
   // Parse log entry from different formats
@@ -95,72 +94,70 @@ export const useWebSocketLogs = (maxLines: number = 1000): UseWebSocketLogsRetur
     });
   };
 
-  // Connect to Socket.IO server
+  // Connect to native WebSocket server
   const connectWebSocket = () => {
     try {
-      console.log('🔌 Attempting Socket.IO connection to http://192.168.1.124:8001/ws/logs');
+      console.log('🔌 Attempting WebSocket connection to ws://192.168.1.124:8001/ws/logs');
       
-      // Connect to the logs namespace directly
-      const logsSocket = io('http://192.168.1.124:8001/ws/logs', {
-        transports: ['polling', 'websocket'], // Try polling first, then websocket
-        timeout: 10000,
-        forceNew: true,
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 2000
-      });
+      const ws = new WebSocket('ws://192.168.1.124:8001/ws/logs');
       
-      console.log('📡 Socket.IO client created, waiting for connection...');
-      
-      logsSocket.on('connect', () => {
-        console.log('✅ Socket.IO connected successfully!');
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected successfully!');
         setIsConnected(true);
-        setConnectionStatus('Connected via Socket.IO');
+        setConnectionStatus('Connected via WebSocket');
         
         // Clear any pending reconnection
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = null;
         }
-      });
+        
+        // Request initial log batch
+        ws.send(JSON.stringify({ type: 'request_logs', limit: 50 }));
+      };
       
-      logsSocket.on('log_entry', (data: any) => {
-        console.log('📋 Received log entry:', data);
+      ws.onmessage = (event) => {
         try {
-          const logEntry = parseLogEntry(data);
-          addLogEntry(logEntry);
+          const data = JSON.parse(event.data);
+          console.log('📋 Received WebSocket message:', data);
+          
+          if (data.type === 'log_batch' && Array.isArray(data.logs)) {
+            // Handle batch of logs
+            data.logs.forEach((logData: any) => {
+              const logEntry = parseLogEntry(logData);
+              addLogEntry(logEntry);
+            });
+          } else if (data.type === 'log_entry') {
+            // Handle single log entry
+            const logEntry = parseLogEntry(data);
+            addLogEntry(logEntry);
+          }
         } catch (error) {
-          console.error('❌ Error parsing log entry:', error, data);
+          console.error('❌ Error parsing WebSocket message:', error, event.data);
         }
-      });
+      };
       
-      logsSocket.on('disconnect', (reason: string) => {
-        console.log('❌ Socket.IO disconnected:', reason);
+      ws.onclose = () => {
+        console.log('❌ WebSocket disconnected');
         setIsConnected(false);
         setConnectionStatus('Disconnected');
         
-        // Don't auto-reconnect if we're disconnecting on purpose
-        if (reason !== 'io client disconnect') {
-          console.log('🔄 Will attempt to reconnect in 5 seconds...');
-          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
-        }
-      });
+        // Attempt to reconnect
+        console.log('🔄 Will attempt to reconnect in 5 seconds...');
+        reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
+      };
       
-      logsSocket.on('connect_error', (error: any) => {
-        console.error('❌ Socket.IO connection error:', error);
-        setConnectionStatus('Connection Error: ' + error.message);
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        setConnectionStatus('Connection Error');
         setIsConnected(false);
-      });
-      
-      logsSocket.on('error', (error: any) => {
-        console.error('❌ Socket.IO error:', error);
-      });
+      };
 
-      // Store the logs socket for cleanup
-      socketRef.current = logsSocket;
+      // Store the WebSocket for cleanup
+      wsRef.current = ws;
       
     } catch (error) {
-      console.error('Failed to create Socket.IO connection:', error);
+      console.error('Failed to create WebSocket connection:', error);
       setConnectionStatus('Failed to Connect');
       
       // Attempt to reconnect after 10 seconds
@@ -203,8 +200,8 @@ export const useWebSocketLogs = (maxLines: number = 1000): UseWebSocketLogsRetur
     connectWebSocket();
     
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+      if (wsRef.current) {
+        wsRef.current.close();
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);

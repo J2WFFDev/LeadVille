@@ -52,7 +52,6 @@ class LeadVilleAPI:
         
         self.setup_routes()
         self.setup_websocket_events()
-        self.setup_auth_routes()
         
     def setup_routes(self):
         """Setup REST API routes"""
@@ -102,17 +101,6 @@ class LeadVilleAPI:
                 emit('log_batch', {'logs': logs})
             except Exception as e:
                 emit('error', {'message': f'Failed to fetch logs: {str(e)}'})
-    
-    def setup_auth_routes(self):
-        """Setup authentication routes"""
-        try:
-            import sys
-            sys.path.insert(0, str(project_root))
-            from src.impact_bridge.auth.api import create_auth_routes
-            create_auth_routes(self.app)
-            print("✅ Authentication routes enabled")
-        except ImportError as e:
-            print(f"⚠️  Authentication not available: {e}")
     
     def fetch_logs(self, limit: int = 100) -> List[Dict[str, Any]]:
         """
@@ -274,8 +262,6 @@ class LeadVilleAPI:
         print(f"   📊 Health: http://{host}:{port}/api/health")
         print(f"   📝 Logs: http://{host}:{port}/api/logs")
         print(f"   🔌 WebSocket: ws://{host}:{port}/ws/logs")
-        print(f"   🔐 Login: POST http://{host}:{port}/api/auth/login")
-        print(f"   🔑 Auth Health: http://{host}:{port}/api/auth/health")
         print()
         print("🎯 Frontend URLs:")
         print(f"   📱 React App: http://{host}:3001")

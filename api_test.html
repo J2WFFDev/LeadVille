@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple WebSocket Test</title>
+</head>
+<body>
+    <h1>Direct API Test (Fallback Method)</h1>
+    <div id="status">Testing...</div>
+    <div id="logs" style="font-family: monospace; white-space: pre-line;"></div>
+    
+    <script>
+        const statusDiv = document.getElementById('status');
+        const logsDiv = document.getElementById('logs');
+        
+        function log(message) {
+            console.log(message);
+            logsDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + message + '\n';
+        }
+        
+        log('🔌 Testing direct API approach (no WebSocket)...');
+        
+        // Test the REST API endpoint that we know works
+        fetch('http://192.168.1.124:8001/api/logs?limit=3')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                log('✅ API connection successful!');
+                log('📋 Received ' + data.length + ' log entries:');
+                data.forEach((entry, index) => {
+                    log(`${index + 1}. [${entry.level}] ${entry.source}: ${entry.message.substring(0, 50)}...`);
+                });
+                statusDiv.innerHTML = 'API: SUCCESS - Logs received';
+                
+                // Now test polling approach (simulating what frontend should do as fallback)
+                log('🔄 Testing polling approach...');
+                let pollCount = 0;
+                const maxPolls = 3;
+                
+                const pollInterval = setInterval(() => {
+                    pollCount++;
+                    log(`📡 Poll attempt ${pollCount}/${maxPolls}...`);
+                    
+                    fetch('http://192.168.1.124:8001/api/logs?limit=2')
+                        .then(response => response.json())
+                        .then(data => {
+                            log(`✅ Poll ${pollCount}: Received ${data.length} entries`);
+                            if (pollCount >= maxPolls) {
+                                clearInterval(pollInterval);
+                                log('🎉 Polling test complete - This proves the fallback method works!');
+                                statusDiv.innerHTML = 'Polling fallback: SUCCESS';
+                            }
+                        })
+                        .catch(error => {
+                            log(`❌ Poll ${pollCount} failed: ${error.message}`);
+                        });
+                }, 2000);
+                
+            })
+            .catch(error => {
+                log('❌ API connection failed: ' + error.message);
+                statusDiv.innerHTML = 'API: FAILED - ' + error.message;
+            });
+    </script>
+</body>
+</html>

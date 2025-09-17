@@ -35,10 +35,18 @@ interface ConnectedDevice {
   status: 'connected' | 'disconnected' | 'low-battery' | 'error';
 }
 
+interface HitEvent {
+  id: string;
+  targetId: string;
+  timestamp: string;
+  magnitude: number;
+}
+
 interface StageLayoutProps {
   stageConfig: StageConfiguration;
   sensorAssignments: Record<string, SensorAssignment>;
   connectedDevices: ConnectedDevice[];
+  liveHitMarkers?: Record<string, HitEvent>; // Optional for RO view
 }
 
 interface SVGCoordinate {
@@ -50,7 +58,8 @@ interface SVGCoordinate {
 export const StageLayout: React.FC<StageLayoutProps> = ({
   stageConfig,
   sensorAssignments,
-  connectedDevices
+  connectedDevices,
+  liveHitMarkers = {}
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 400 });
@@ -178,7 +187,8 @@ export const StageLayout: React.FC<StageLayoutProps> = ({
           const coords = convertToSVGCoordinates(target);
           const targetId = `P${target.target_number}`;
           const sensorInfo = getSensorInfo(targetId);
-          const isHit = false; // Hit animation logic will be added later
+          const hitEvent = liveHitMarkers[targetId];
+          const isHit = !!hitEvent; // Check if target has active hit marker
           
           return (
             <g key={target.target_number}>
@@ -252,9 +262,9 @@ export const StageLayout: React.FC<StageLayoutProps> = ({
                       </text>
                     )}
                     
-                    {/* Last hit */}
-                    <text x="8" y="52" fontSize="9" fill="#6b7280">
-                      Last: {getTimeAgo(sensorInfo.lastHit)}
+                    {/* Last hit - show live hit or historical */}
+                    <text x="8" y="52" fontSize="9" fill={isHit ? "#ef4444" : "#6b7280"}>
+                      {isHit ? `HIT! ${new Date(hitEvent.timestamp).toLocaleTimeString()}` : `Last: ${getTimeAgo(sensorInfo.lastHit)}`}
                     </text>
                   </>
                 ) : (

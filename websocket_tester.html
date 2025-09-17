@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille WebSocket Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .messages { height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+        .message { margin: 5px 0; padding: 5px; background: #f8f9fa; border-left: 3px solid #007bff; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        input, select { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 LeadVille WebSocket Tester</h1>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <div>
+            <button onclick="connect()">Connect</button>
+            <button onclick="disconnect()">Disconnect</button>
+            <button onclick="sendPing()">Send Ping</button>
+            <button onclick="clearMessages()">Clear Messages</button>
+        </div>
+        
+        <div>
+            <h3>Subscribe to Channels:</h3>
+            <select id="channelSelect" multiple style="width: 200px; height: 100px;">
+                <option value="status">Status</option>
+                <option value="sensor_events">Sensor Events</option>
+                <option value="timer_events">Timer Events</option>
+                <option value="health_status">Health Status</option>
+                <option value="run_updates">Run Updates</option>
+                <option value="system_monitoring">System Monitoring</option>
+            </select>
+            <button onclick="subscribeToChannels()">Subscribe</button>
+        </div>
+        
+        <div>
+            <h3>Send Test Event:</h3>
+            <input type="text" id="eventType" placeholder="Event Type" value="test_event">
+            <input type="text" id="eventData" placeholder="Event Data (JSON)" value='{"message": "Hello World"}'>
+            <button onclick="sendTestEvent()">Send Event</button>
+        </div>
+        
+        <div id="messages" class="messages">
+            <div class="message">Messages will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let messageCount = 0;
+
+        function updateStatus(connected) {
+            const statusDiv = document.getElementById('status');
+            if (connected) {
+                statusDiv.textContent = 'Connected to ws://192.168.1.124:8001/ws/live';
+                statusDiv.className = 'status connected';
+            } else {
+                statusDiv.textContent = 'Disconnected';
+                statusDiv.className = 'status disconnected';
+            }
+        }
+
+        function addMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            messageDiv.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong> [${type}]: ${message}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            messageCount++;
+        }
+
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                addMessage('Already connected', 'warning');
+                return;
+            }
+
+            ws = new WebSocket('ws://192.168.1.124:8001/ws/live');
+            
+            ws.onopen = function() {
+                updateStatus(true);
+                addMessage('Connected successfully!', 'success');
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    addMessage(`<pre>${JSON.stringify(data, null, 2)}</pre>`, 'message');
+                } catch (e) {
+                    addMessage(`Raw: ${event.data}`, 'raw');
+                }
+            };
+            
+            ws.onclose = function() {
+                updateStatus(false);
+                addMessage('Connection closed', 'warning');
+            };
+            
+            ws.onerror = function(error) {
+                addMessage(`Error: ${error}`, 'error');
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function sendPing() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type: 'ping'}));
+                addMessage('Ping sent', 'info');
+            } else {
+                addMessage('Not connected', 'error');
+            }
+        }
+
+        function subscribeToChannels() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const select = document.getElementById('channelSelect');
+                const channels = Array.from(select.selectedOptions).map(option => option.value);
+                ws.send(JSON.stringify({type: 'subscribe', channels: channels}));
+                addMessage(`Subscribing to: ${channels.join(', ')}`, 'info');
+            } else {
+                addMessage('Not connected', 'error');
+            }
+        }
+
+        function sendTestEvent() {
+            const eventType = document.getElementById('eventType').value;
+            const eventData = document.getElementById('eventData').value;
+            
+            try {
+                const data = JSON.parse(eventData);
+                fetch('http://192.168.1.124:8001/api/events/send', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        type: eventType,
+                        channel: 'status',
+                        data: data
+                    })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    addMessage(`Test event sent: ${JSON.stringify(result)}`, 'info');
+                })
+                .catch(error => {
+                    addMessage(`Error sending event: ${error}`, 'error');
+                });
+            } catch (e) {
+                addMessage(`Invalid JSON data: ${e}`, 'error');
+            }
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '<div class="message">Messages cleared...</div>';
+            messageCount = 0;
+        }
+
+        // Auto-connect on page load
+        window.onload = function() {
+            connect();
+        };
+    </script>
+</body>
+</html>

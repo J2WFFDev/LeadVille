@@ -1,0 +1,32 @@
+[Unit]
+Description=LeadVille Frontend Development Server
+After=network.target leadville-fastapi.service
+Wants=leadville-fastapi.service
+PartOf=leadville.target
+
+[Service]
+Type=exec
+User=jrwest
+Group=jrwest
+WorkingDirectory=/home/jrwest/projects/LeadVille/frontend
+Environment=PATH=/home/jrwest/.nvm/versions/node/v20.18.0/bin:/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=development
+Environment=NVM_DIR=/home/jrwest/.nvm
+ExecStartPre=/bin/bash -c '. $NVM_DIR/nvm.sh && nvm use 20.18.0'
+ExecStart=/bin/bash -c '. /home/jrwest/.nvm/nvm.sh && cd /home/jrwest/projects/LeadVille/frontend && npm run dev -- --host 0.0.0.0 --port 5173'
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits
+MemoryMax=1G
+CPUQuota=75%
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=leadville.target

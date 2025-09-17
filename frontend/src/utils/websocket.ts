@@ -61,7 +61,7 @@ export class LeadVilleWebSocketClient {
 
   constructor(config: Partial<WebSocketConfig> = {}) {
     this.config = {
-      url: 'ws://192.168.1.124:8001',
+      url: 'ws://192.168.1.124:8001/ws/live',
       reconnectInterval: 3000,
       maxReconnectAttempts: 10,
       ...config
