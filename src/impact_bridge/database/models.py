@@ -22,6 +22,77 @@ from sqlalchemy.sql import func
 Base = declarative_base()
 
 
+class League(Base):
+    """Competition league (SASP, Steel Challenge, etc.)"""
+    __tablename__ = 'leagues'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False, unique=True)
+    abbreviation = Column(String(10), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=func.now())
+    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    stage_configs = relationship("StageConfig", back_populates="league", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index('idx_league_name', 'name'),
+    )
+
+
+class StageConfig(Base):
+    """Stage configuration template (independent of matches)"""
+    __tablename__ = 'stage_configs'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    league_id = Column(Integer, ForeignKey('leagues.id'), nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=func.now())
+    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    league = relationship("League", back_populates="stage_configs")
+    target_configs = relationship("TargetConfig", back_populates="stage_config", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index('idx_stage_config_league', 'league_id'),
+        UniqueConstraint('league_id', 'name', name='uq_stage_config_league_name'),
+    )
+
+
+class TargetConfig(Base):
+    """Target configuration template"""
+    __tablename__ = 'target_configs'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    stage_config_id = Column(Integer, ForeignKey('stage_configs.id'), nullable=False)
+    target_number = Column(Integer, nullable=False)
+    shape = Column(String(50), nullable=False)  # "12\" Circle", "18\"x24\" Rectangle"
+    type = Column(String(20), nullable=False)  # Plate, Gong
+    category = Column(String(20), nullable=False)  # Primary, Stop, Penalty
+    distance_feet = Column(Integer, nullable=False)
+    offset_feet = Column(Float, nullable=False)  # Offset from centerline (negative = left)
+    height_feet = Column(Float, nullable=False)  # Height from ground
+    created_at = Column(DateTime, nullable=False, default=func.now())
+    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    stage_config = relationship("StageConfig", back_populates="target_configs")
+    sensors = relationship("Sensor", back_populates="target_config")
+    targets = relationship("Target", back_populates="target_config")
+    
+    __table_args__ = (
+        CheckConstraint("type IN ('Plate', 'Gong')", name='check_target_config_type'),
+        CheckConstraint("category IN ('Primary', 'Stop', 'Penalty')", name='check_target_config_category'),
+        CheckConstraint("distance_feet > 0", name='check_target_config_distance'),
+        Index('idx_target_config_stage', 'stage_config_id'),
+        Index('idx_target_config_number', 'target_number'),
+        UniqueConstraint('stage_config_id', 'target_number', name='uq_target_config_stage_number'),
+    )
+
+
 class Role(str, Enum):
     """User roles with hierarchical permissions"""
     ADMIN = "admin"          # Full system access
@@ -61,7 +132,8 @@ class Sensor(Base):
     hw_addr = Column(String(17), nullable=False, unique=True)  # MAC address
     label = Column(String(100), nullable=False)
     node_id = Column(Integer, ForeignKey('nodes.id'), nullable=True)
-    target_id = Column(Integer, ForeignKey('targets.id'), nullable=True)
+    target_id = Column(Integer, ForeignKey('targets.id'), nullable=True)  # For match-specific assignments
+    target_config_id = Column(Integer, ForeignKey('target_configs.id'), nullable=True)  # For stage configuration
     calib = Column(JSON, nullable=True)  # Calibration data
     last_seen = Column(DateTime, nullable=True)
     battery = Column(Integer, nullable=True)  # Battery percentage
@@ -72,6 +144,7 @@ class Sensor(Base):
     # Relationships
     node = relationship("Node", back_populates="sensors")
     target = relationship("Target", back_populates="sensor")
+    target_config = relationship("TargetConfig", back_populates="sensors")
     sensor_events = relationship("SensorEvent", back_populates="sensor", cascade="all, delete-orphan")
     
     __table_args__ = (
@@ -79,6 +152,7 @@ class Sensor(Base):
         CheckConstraint("rssi >= -100 AND rssi <= 0", name='check_sensor_rssi'),
         Index('idx_sensor_hw_addr', 'hw_addr'),
         Index('idx_sensor_target', 'target_id'),
+        Index('idx_sensor_target_config', 'target_config_id'),
         Index('idx_sensor_last_seen', 'last_seen'),
     )
 
@@ -89,6 +163,7 @@ class Target(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     stage_id = Column(Integer, ForeignKey('stages.id'), nullable=False)
+    target_config_id = Column(Integer, ForeignKey('target_configs.id'), nullable=True)
     name = Column(String(100), nullable=False)
     geometry = Column(JSON, nullable=True)  # Shape, size, position data
     notes = Column(Text, nullable=True)
@@ -97,6 +172,7 @@ class Target(Base):
     
     # Relationships
     stage = relationship("Stage", back_populates="targets")
+    target_config = relationship("TargetConfig", back_populates="targets")
     sensor = relationship("Sensor", back_populates="target", uselist=False)
     
     __table_args__ = (

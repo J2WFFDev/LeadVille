@@ -1,9 +1,11 @@
 /**
- * Console logs page component with real-time WebSocket streaming
- * Redesigned with proper nested scrolling and source integration
+ * Console logs page component - Updated per user feedback
+ * 1. Fixed source name display in header 
+ * 2. Removed Pause button (not needed)
+ * 3. Increased log limit to show more history since startup
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useWebSocketLogs } from '../hooks/useWebSocketLogs';
 
 interface LogEntryProps {
@@ -17,48 +19,70 @@ interface LogEntryProps {
 }
 
 const LogEntry = ({ log }: LogEntryProps) => {
-  const getRowClass = () => {
+  const getRowStyle = () => {
     switch (log.level) {
       case 'ERROR':
-        return 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500';
+        return {
+          backgroundColor: '#fef2f2',
+          borderLeft: '4px solid #ef4444'
+        };
       case 'WARNING':
-        return 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-l-yellow-500';
+        return {
+          backgroundColor: '#fefce8',
+          borderLeft: '4px solid #eab308'
+        };
       case 'DEBUG':
-        return 'bg-purple-50 hover:bg-purple-100 border l-4 border-l-purple-500';
+        return {
+          backgroundColor: '#faf5ff',
+          borderLeft: '4px solid #a855f7'
+        };
       case 'INFO':
       default:
-        return 'bg-white hover:bg-gray-50 border-l-4 border-l-blue-500';
+        return {
+          backgroundColor: '#ffffff',
+          borderLeft: '4px solid #3b82f6'
+        };
     }
   };
 
-  const getLevelBadgeClass = () => {
+  const getLevelBadgeStyle = () => {
     switch (log.level) {
       case 'ERROR':
-        return 'bg-red-100 text-red-700 px-2 py-1 text-xs font-bold rounded';
+        return {
+          backgroundColor: '#fecaca',
+          color: '#991b1b',
+        };
       case 'WARNING':
-        return 'bg-yellow-100 text-yellow-700 px-2 py-1 text-xs font-bold rounded';
+        return {
+          backgroundColor: '#fef3c7',
+          color: '#92400e',
+        };
       case 'DEBUG':
-        return 'bg-purple-100 text-purple-700 px-2 py-1 text-xs font-bold rounded';
+        return {
+          backgroundColor: '#e9d5ff',
+          color: '#6b21a8',
+        };
       case 'INFO':
       default:
-        return 'bg-blue-100 text-blue-700 px-2 py-1 text-xs font-bold rounded';
+        return {
+          backgroundColor: '#dbeafe',
+          color: '#1e40af',
+        };
     }
   };
 
   const getSourceTag = () => {
-    // Clean up source names for display
     let cleanSource = log.source;
     if (cleanSource.includes('bridge_console_')) {
       cleanSource = 'Bridge';
     } else if (cleanSource.toLowerCase().includes('bt50')) {
-      cleanSource = 'BT50Sensor';
+      cleanSource = 'BT50';
     } else if (cleanSource.toLowerCase().includes('amg')) {
-      cleanSource = 'AMGTimer';
+      cleanSource = 'AMG';
     }
     
-    // Truncate if still too long
     if (cleanSource.length > 12) {
-      cleanSource = cleanSource.substring(0, 12) + '…';
+      cleanSource = cleanSource.substring(0, 12) + '...';
     }
     
     return cleanSource;
@@ -80,21 +104,69 @@ const LogEntry = ({ log }: LogEntryProps) => {
   };
 
   return (
-    <tr className={`${getRowClass()} transition-colors duration-150 border-b border-gray-100`}>
-      <td className="w-32 px-3 py-2 text-xs font-mono text-gray-600 border-r border-gray-200 bg-gray-50">
+    <tr 
+      style={{
+        ...getRowStyle(),
+        borderBottom: '1px solid #e5e7eb'
+      }}
+      className="hover:opacity-80 transition-all"
+    >
+      <td 
+        style={{
+          width: '130px',
+          padding: '8px 12px',
+          fontSize: '11px',
+          fontFamily: 'monospace',
+          color: '#4b5563',
+          borderRight: '1px solid #d1d5db',
+          backgroundColor: '#f9fafb'
+        }}
+      >
         {formatTimestamp(log.timestamp)}
       </td>
-      <td className="w-20 px-3 py-2 border-r border-gray-200 bg-gray-50">
-        <span className={getLevelBadgeClass()}>
+      <td 
+        style={{
+          width: '80px',
+          padding: '8px 12px',
+          borderRight: '1px solid #d1d5db',
+          backgroundColor: '#f9fafb'
+        }}
+      >
+        <span 
+          style={{
+            ...getLevelBadgeStyle(),
+            padding: '4px 8px',
+            fontSize: '10px',
+            fontWeight: 'bold',
+            borderRadius: '4px'
+          }}
+        >
           {log.level}
         </span>
       </td>
-      <td className="px-3 py-2 text-xs text-gray-800">
-        <div className="flex items-start gap-2">
-          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium shrink-0">
+      <td 
+        style={{
+          padding: '8px 12px',
+          fontSize: '12px',
+          color: '#1f2937'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+          <span 
+            style={{
+              backgroundColor: '#e5e7eb',
+              color: '#374151',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              fontSize: '10px',
+              fontWeight: '500',
+              marginRight: '8px',
+              flexShrink: 0
+            }}
+          >
             {getSourceTag()}
           </span>
-          <span className="font-mono leading-relaxed break-words">
+          <span style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
             {log.message}
           </span>
         </div>
@@ -104,21 +176,12 @@ const LogEntry = ({ log }: LogEntryProps) => {
 };
 
 export const ConsolePage = () => {
-  const { logs, isConnected, connectionStatus, clearLogs, pauseLogging, resumeLogging } = useWebSocketLogs(500);
-  const [isPaused, setIsPaused] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
+  // Increased log limit to show more history since startup
+  const { logs, isConnected, connectionStatus } = useWebSocketLogs(2000);
   const [searchFilter, setSearchFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState<string>('ALL');
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const [isRestarting, setIsRestarting] = useState(false);
 
-  // Auto-scroll to bottom when new logs arrive
-  useEffect(() => {
-    if (autoScroll && logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logs, autoScroll]);
-
-  // Filter logs based on search and level
   const filteredLogs = logs.filter(log => {
     const matchesSearch = searchFilter === '' || 
       log.message.toLowerCase().includes(searchFilter.toLowerCase()) ||
@@ -129,63 +192,164 @@ export const ConsolePage = () => {
     return matchesSearch && matchesLevel;
   });
 
-  const handlePauseToggle = () => {
-    if (isPaused) {
-      resumeLogging();
-      setIsPaused(false);
+  // Get primary source for header display - improved logic
+  const getPrimarySource = () => {
+    if (logs.length === 0) return 'Waiting for logs...';
+    
+    // Get all unique sources from recent logs
+    const recentSources = logs.slice(-20).map(log => {
+      if (log.source.includes('bridge_console_')) return 'Bridge';
+      if (log.source.toLowerCase().includes('bt50')) return 'BT50';
+      if (log.source.toLowerCase().includes('amg')) return 'AMG';
+      if (log.source.toLowerCase().includes('fastapi')) return 'FastAPI';
+      if (log.source.toLowerCase().includes('websocket')) return 'WebSocket';
+      return log.source.length > 15 ? log.source.substring(0, 15) + '...' : log.source;
+    });
+    
+    const uniqueSources = [...new Set(recentSources)];
+    
+    if (uniqueSources.length === 0) {
+      return 'System';
+    } else if (uniqueSources.length === 1) {
+      return uniqueSources[0];
+    } else if (uniqueSources.length <= 3) {
+      return uniqueSources.join(', ');
     } else {
-      pauseLogging();
-      setIsPaused(true);
+      return `${uniqueSources.slice(0, 2).join(', ')} +${uniqueSources.length - 2} more`;
     }
   };
 
-  const getConnectionStatusClass = () => {
-    if (isConnected) return 'text-green-600 bg-green-100 border border-green-300';
-    return 'text-red-600 bg-red-100 border border-red-300';
+  const handleRestartService = async () => {
+    setIsRestarting(true);
+    try {
+      const response = await fetch('/api/admin/services/restart', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        try {
+          const result = await response.json();
+          alert(`Bridge service restart initiated successfully!`);
+        } catch (jsonError) {
+          // JSON parsing failed, but response was OK - restart probably succeeded
+          alert(`Bridge service restart initiated! (Response parsing issue, but restart likely succeeded)`);
+        }
+        
+        // Reset the button state after a delay
+        setTimeout(() => {
+          setIsRestarting(false);
+        }, 5000);
+      } else {
+        try {
+          const error = await response.json();
+          alert(`Failed to restart service: ${error.error || 'Unknown error'}`);
+        } catch (jsonError) {
+          alert(`Failed to restart service: HTTP ${response.status}`);
+        }
+        setIsRestarting(false);
+      }
+    } catch (error) {
+      alert(`Network error: ${error}`);
+      setIsRestarting(false);
+    }
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      {/* Fixed Header - Controls */}
-      <div className="flex-shrink-0 bg-white shadow-sm border-b p-4">
-        <div className="flex items-center justify-between mb-4">
+    <div 
+      style={{ 
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#f3f4f6'
+      }}
+    >
+      {/* Fixed Header */}
+      <div 
+        style={{
+          backgroundColor: '#ffffff',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          borderBottom: '1px solid #e5e7eb',
+          padding: '16px'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
               🖥️ System Console
             </h1>
-            <p className="text-gray-600 text-sm">
+            <p style={{ color: '#6b7280', fontSize: '14px', margin: '4px 0 0 0' }}>
               Real-time log streaming from LeadVille Bridge
             </p>
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontSize: '12px', color: '#6b7280', marginRight: '8px' }}>
+                Source:
+              </span>
+              <span 
+                style={{
+                  backgroundColor: '#dbeafe',
+                  color: '#1e40af',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}
+              >
+                {getPrimarySource()}
+              </span>
+            </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className={`px-3 py-2 rounded-lg font-semibold text-sm ${getConnectionStatusClass()}`}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div 
+              style={{
+                padding: '8px 12px',
+                borderRadius: '6px',
+                fontWeight: '600',
+                fontSize: '14px',
+                ...(isConnected 
+                  ? { color: '#065f46', backgroundColor: '#d1fae5', border: '1px solid #10b981' }
+                  : { color: '#991b1b', backgroundColor: '#fee2e2', border: '1px solid #ef4444' }
+                )
+              }}
+            >
               {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
             </div>
-            <div className="text-xs text-gray-500">
+            <div style={{ fontSize: '12px', color: '#6b7280', marginLeft: '12px' }}>
               {connectionStatus}
             </div>
           </div>
         </div>
 
-        {/* Controls Row */}
-        <div className="flex flex-wrap items-center gap-4 mb-3">
-          {/* Search */}
-          <div className="flex-1 min-w-64">
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' }}>
+          <div style={{ flex: '1 1 256px', marginRight: '16px' }}>
             <input
               type="text"
               placeholder="Search logs..."
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
             />
           </div>
 
-          {/* Level Filter */}
           <select
             value={levelFilter}
             onChange={(e) => setLevelFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              fontSize: '14px',
+              marginRight: '8px'
+            }}
           >
             <option value="ALL">All Levels</option>
             <option value="ERROR">Errors Only</option>
@@ -194,55 +358,70 @@ export const ConsolePage = () => {
             <option value="DEBUG">Debug Only</option>
           </select>
 
-          {/* Control Buttons */}
+          {/* Restart Service Button */}
           <button
-            onClick={handlePauseToggle}
-            className={`px-4 py-2 rounded-lg font-semibold text-sm ${
-              isPaused 
-                ? 'bg-green-500 text-white hover:bg-green-600' 
-                : 'bg-yellow-500 text-white hover:bg-yellow-600'
-            }`}
+            onClick={handleRestartService}
+            disabled={isRestarting}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              fontWeight: '600',
+              fontSize: '14px',
+              border: 'none',
+              cursor: isRestarting ? 'not-allowed' : 'pointer',
+              backgroundColor: isRestarting ? '#d1d5db' : '#f97316',
+              color: isRestarting ? '#6b7280' : '#ffffff',
+              marginLeft: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
           >
-            {isPaused ? '▶️ Resume' : '⏸️ Pause'}
+            {isRestarting ? (
+              <>
+                <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</span>
+                Restarting...
+              </>
+            ) : (
+              <>🔄 Restart Service</>
+            )}
           </button>
 
-          <button
-            onClick={() => setAutoScroll(!autoScroll)}
-            className={`px-4 py-2 rounded-lg font-semibold text-sm ${
-              autoScroll 
-                ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                : 'bg-gray-500 text-white hover:bg-gray-600'
-            }`}
-          >
-            {autoScroll ? '📌 Auto-scroll: ON' : '📌 Auto-scroll: OFF'}
-          </button>
-
-          <button
-            onClick={clearLogs}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 text-sm"
-          >
-            🗑️ Clear
-          </button>
+          {/* Removed Pause button - not needed for log viewing */}
         </div>
 
-        {/* Stats */}
-        <div className="flex gap-6 text-sm text-gray-600">
-          <span>Total: <strong>{logs.length}</strong></span>
-          <span>Filtered: <strong>{filteredLogs.length}</strong></span>
-          <span>Errors: <strong>{logs.filter(l => l.level === 'ERROR').length}</strong></span>
-          <span>Warnings: <strong>{logs.filter(l => l.level === 'WARNING').length}</strong></span>
+        <div style={{ display: 'flex', fontSize: '14px', color: '#6b7280' }}>
+          <span style={{ marginRight: '24px' }}>Total: <strong>{logs.length}</strong></span>
+          <span style={{ marginRight: '24px' }}>Filtered: <strong>{filteredLogs.length}</strong></span>
+          <span style={{ marginRight: '24px' }}>Errors: <strong>{logs.filter(l => l.level === 'ERROR').length}</strong></span>
+          <span style={{ marginRight: '24px' }}>Warnings: <strong>{logs.filter(l => l.level === 'WARNING').length}</strong></span>
+          <span>Since startup</span>
         </div>
       </div>
 
-      {/* Logs Container - This is the key fix! */}
-      <div className="flex-1 min-h-0 bg-white border-t">
-        <div className="h-full overflow-auto">
+      {/* Logs Container - SCROLLABLE (No Auto-scroll) */}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <div 
+          style={{ 
+            height: '100%', 
+            overflow: 'auto', 
+            backgroundColor: '#ffffff' 
+          }}
+        >
           {filteredLogs.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <div className="text-center">
-                <div className="text-4xl mb-4">📋</div>
-                <p className="text-lg">No logs to display</p>
-                <p className="text-sm">
+            <div 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                height: '100%', 
+                color: '#6b7280' 
+              }}
+            >
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+                <p style={{ fontSize: '18px', margin: '0 0 8px 0' }}>No logs to display</p>
+                <p style={{ fontSize: '14px', margin: 0 }}>
                   {logs.length === 0 
                     ? 'Waiting for log entries...' 
                     : 'Try adjusting your filters'
@@ -251,16 +430,55 @@ export const ConsolePage = () => {
               </div>
             </div>
           ) : (
-            <table className="w-full table-fixed">
-              <thead className="sticky top-0 bg-gray-200 border-b-2 border-gray-300 shadow-sm">
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead 
+                style={{ 
+                  position: 'sticky', 
+                  top: 0, 
+                  backgroundColor: '#d1d5db', 
+                  borderBottom: '2px solid #9ca3af',
+                  zIndex: 10
+                }}
+              >
                 <tr>
-                  <th className="w-32 px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wide border-r border-gray-300">
+                  <th 
+                    style={{
+                      width: '130px',
+                      padding: '12px',
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      color: '#1f2937',
+                      textTransform: 'uppercase',
+                      borderRight: '1px solid #9ca3af'
+                    }}
+                  >
                     Timestamp
                   </th>
-                  <th className="w-20 px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wide border-r border-gray-300">
+                  <th 
+                    style={{
+                      width: '80px',
+                      padding: '12px',
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      color: '#1f2937',
+                      textTransform: 'uppercase',
+                      borderRight: '1px solid #9ca3af'
+                    }}
+                  >
                     Level
                   </th>
-                  <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wide">
+                  <th 
+                    style={{
+                      padding: '12px',
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      color: '#1f2937',
+                      textTransform: 'uppercase'
+                    }}
+                  >
                     Message
                   </th>
                 </tr>
@@ -275,18 +493,22 @@ export const ConsolePage = () => {
               </tbody>
             </table>
           )}
-          <div ref={logsEndRef} />
         </div>
       </div>
 
       {/* Fixed Footer */}
-      <div className="flex-shrink-0 bg-gray-100 border-t px-4 py-2 text-xs text-gray-600">
-        <div className="flex justify-between items-center">
+      <div 
+        style={{
+          backgroundColor: '#e5e7eb',
+          borderTop: '1px solid #d1d5db',
+          padding: '8px 16px',
+          fontSize: '12px',
+          color: '#6b7280'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>WebSocket: ws://192.168.1.124:8001/ws/logs</span>
-          <span>
-            {isPaused ? 'Logging paused' : 'Live streaming'} • 
-            Auto-scroll: {autoScroll ? 'ON' : 'OFF'}
-          </span>
+          <span>Live streaming • Manual scroll</span>
         </div>
       </div>
     </div>

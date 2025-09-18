@@ -165,6 +165,38 @@ def get_service_health():
             status_code=500
         )
 
+@app.post("/api/admin/services/restart")
+async def restart_bridge_service():
+    """Restart the leadville-bridge service (core BLE bridge, not the API)"""
+    try:
+        import subprocess
+        import asyncio
+        from datetime import datetime
+        
+        # Schedule restart with a small delay to allow response to be sent
+        async def delayed_restart():
+            await asyncio.sleep(2)  # Give time for response to be sent
+            try:
+                result = subprocess.run(['/usr/bin/sudo', '/usr/bin/systemctl', 'restart', 'leadville-bridge'], 
+                                      check=True, capture_output=True, text=True)
+                logger.info("Bridge service restart initiated successfully")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to restart bridge service: {e.returncode} - stdout: {e.stdout} - stderr: {e.stderr}")
+        
+        # Schedule the restart
+        asyncio.create_task(delayed_restart())
+        
+        return JSONResponse(content={
+            "status": "restart_initiated",
+            "message": "Bridge service restart initiated. Service will restart in 2 seconds.",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"Failed to restart service: {str(e)}"},
+            status_code=500
+        )
+
 @app.get("/api/admin/ble")
 def get_ble_quality():
     """Get BLE connection quality and status"""
@@ -422,6 +454,299 @@ def update_node_info(request: dict):
             status_code=500
         )
 
+# ===== STAGE MANAGEMENT ENDPOINTS =====
+
+@app.get("/api/admin/leagues")
+def get_leagues():
+    """Get all available leagues"""
+    try:
+        from .database.models import League
+        from .database.session import get_db_session
+        
+        session = get_db_session()
+        leagues = session.query(League).all()
+        session.close()
+        
+        return JSONResponse(content={
+            "leagues": [
+                {
+                    "id": league.id,
+                    "name": league.name,
+                    "abbreviation": league.abbreviation,
+                    "description": league.description
+                }
+                for league in leagues
+            ]
+        })
+    except Exception as e:
+        logger.error(f"Failed to get leagues: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get leagues: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/admin/leagues/{league_id}/stages")
+def get_league_stages(league_id: int):
+    """Get all stage configurations for a league"""
+    try:
+        from .database.models import League, StageConfig, TargetConfig, Sensor
+        from .database.database import get_database_session
+        from sqlalchemy.orm import joinedload
+        
+        with get_database_session() as session:
+            league = session.query(League).filter_by(id=league_id).first()
+            
+            if not league:
+                return JSONResponse(
+                    content={"error": "League not found"},
+                    status_code=404
+                )
+            
+            stages = session.query(StageConfig).options(
+                joinedload(StageConfig.target_configs)
+            ).filter_by(league_id=league_id).all()
+            
+            # Get all sensors assigned to target configs
+            assigned_sensors = session.query(Sensor).filter(
+                Sensor.target_config_id.isnot(None)
+            ).all()
+            sensor_by_target_config = {sensor.target_config_id: sensor for sensor in assigned_sensors}
+            
+            return JSONResponse(content={
+                "league": {
+                    "id": league.id,
+                    "name": league.name,
+                    "abbreviation": league.abbreviation
+                },
+                "stages": [
+                    {
+                        "id": stage.id,
+                        "name": stage.name,
+                        "description": stage.description,
+                        "target_count": len(stage.target_configs),
+                        "targets": [
+                            {
+                                "id": target.id,
+                                "target_number": target.target_number,
+                                "shape": target.shape,
+                                "type": target.type,
+                                "category": target.category,
+                                "distance_feet": target.distance_feet,
+                                "offset_feet": target.offset_feet,
+                                "height_feet": target.height_feet,
+                                "sensor": {
+                                    "id": sensor_by_target_config[target.id].id,
+                                    "hw_addr": sensor_by_target_config[target.id].hw_addr,
+                                    "label": sensor_by_target_config[target.id].label,
+                                    "last_seen": sensor_by_target_config[target.id].last_seen.isoformat() if sensor_by_target_config[target.id].last_seen else None,
+                                    "battery": sensor_by_target_config[target.id].battery,
+                                    "rssi": sensor_by_target_config[target.id].rssi
+                                } if target.id in sensor_by_target_config else None
+                            }
+                            for target in sorted(stage.target_configs, key=lambda t: t.target_number)
+                        ]
+                    }
+                    for stage in stages
+                ]
+            })
+    except Exception as e:
+        logger.error(f"Failed to get league stages: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get league stages: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/admin/stages/{stage_id}")
+def get_stage_details(stage_id: int):
+    """Get detailed stage configuration including target layout"""
+    try:
+        from .database.models import StageConfig, TargetConfig, Sensor
+        from .database.database import get_database_session
+        from sqlalchemy.orm import joinedload
+        
+        with get_database_session() as session:
+            stage = session.query(StageConfig).options(
+                joinedload(StageConfig.target_configs),
+                joinedload(StageConfig.league)
+            ).filter_by(id=stage_id).first()
+            
+            if not stage:
+                return JSONResponse(
+                    content={"error": "Stage not found"},
+                    status_code=404
+                )
+            
+            # Get target config IDs for this stage
+            target_config_ids = [target.id for target in stage.target_configs]
+            
+            # Get sensors assigned to any target in this stage
+            assigned_sensors = session.query(Sensor).filter(
+                Sensor.target_config_id.in_(target_config_ids)
+            ).all()
+            sensor_assignments = {sensor.target_config_id: sensor for sensor in assigned_sensors}
+            
+            return JSONResponse(content={
+            "stage": {
+                "id": stage.id,
+                "name": stage.name,
+                "description": stage.description,
+                "league": {
+                    "id": stage.league.id,
+                    "name": stage.league.name,
+                    "abbreviation": stage.league.abbreviation
+                },
+                "targets": [
+                    {
+                        "id": target.id,
+                        "target_number": target.target_number,
+                        "shape": target.shape,
+                        "type": target.type,
+                        "category": target.category,
+                        "distance_feet": target.distance_feet,
+                        "offset_feet": target.offset_feet,
+                        "height_feet": target.height_feet,
+                        "sensor": {
+                            "id": sensor_assignments[target.id].id,
+                            "hw_addr": sensor_assignments[target.id].hw_addr,
+                            "label": sensor_assignments[target.id].label,
+                            "last_seen": sensor_assignments[target.id].last_seen.isoformat() if sensor_assignments[target.id].last_seen else None,
+                            "battery": sensor_assignments[target.id].battery,
+                            "rssi": sensor_assignments[target.id].rssi
+                        } if target.id in sensor_assignments else None
+                    }
+                    for target in sorted(stage.target_configs, key=lambda t: t.target_number)
+                ]
+            }
+        })
+    except Exception as e:
+        logger.error(f"Failed to get stage details: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get stage details: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/stages/{stage_id}/assign_sensor")
+def assign_sensor_to_target(stage_id: int, request: dict):
+    """Assign a sensor to a specific target in a stage"""
+    try:
+        from .database.models import StageConfig, TargetConfig, Sensor
+        from .database.database import get_database_session
+        
+        sensor_id = request.get("sensor_id")
+        target_number = request.get("target_number")
+        
+        if not sensor_id or not target_number:
+            return JSONResponse(
+                content={"error": "sensor_id and target_number are required"},
+                status_code=400
+            )
+        
+        with get_database_session() as session:
+            # Verify stage exists
+            stage = session.query(StageConfig).filter_by(id=stage_id).first()
+            if not stage:
+                return JSONResponse(
+                    content={"error": "Stage not found"},
+                    status_code=404
+                )
+            
+            # Find the target config
+            target_config = session.query(TargetConfig).filter_by(
+                stage_config_id=stage_id,
+                target_number=target_number
+            ).first()
+            
+            if not target_config:
+                return JSONResponse(
+                    content={"error": f"Target {target_number} not found in stage"},
+                    status_code=404
+                )
+            
+            # Find the sensor
+            sensor = session.query(Sensor).filter_by(id=sensor_id).first()
+            if not sensor:
+                return JSONResponse(
+                    content={"error": "Sensor not found"},
+                    status_code=404
+                )
+            
+            # Clear any existing assignment for this sensor
+            sensor.target_config_id = None
+            
+            # Assign sensor to target
+            sensor.target_config_id = target_config.id
+            
+            # Store data we need for response before session closes
+            sensor_label = sensor.label
+            stage_name = stage.name
+            target_type = target_config.type
+            target_category = target_config.category
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Sensor {sensor_label} assigned to {stage_name} Target {target_number}",
+            "assignment": {
+                "sensor_id": sensor_id,
+                "sensor_label": sensor_label,
+                "stage_name": stage_name,
+                "target_number": target_number,
+                "target_type": target_type,
+                "target_category": target_category
+            }
+        })
+    except Exception as e:
+        logger.error(f"Failed to assign sensor: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to assign sensor: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/stages/{stage_id}/unassign_sensor")
+def unassign_sensor_from_target(stage_id: int, request: dict):
+    """Remove sensor assignment from a target"""
+    try:
+        from .database.models import TargetConfig, Sensor
+        from .database.database import get_database_session
+        
+        target_number = request.get("target_number")
+        
+        if not target_number:
+            return JSONResponse(
+                content={"error": "target_number is required"},
+                status_code=400
+            )
+        
+        with get_database_session() as session:
+            # Find the target config
+            target_config = session.query(TargetConfig).filter_by(
+                stage_config_id=stage_id,
+                target_number=target_number
+            ).first()
+            
+            if not target_config:
+                return JSONResponse(
+                    content={"error": f"Target {target_number} not found in stage"},
+                    status_code=404
+                )
+            
+            # Find assigned sensor
+            sensor = session.query(Sensor).filter_by(target_config_id=target_config.id).first()
+            
+            if sensor:
+                sensor.target_config_id = None
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Sensor unassigned from Target {target_number}",
+            "target_number": target_number
+        })
+    except Exception as e:
+        logger.error(f"Failed to unassign sensor: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to unassign sensor: {str(e)}"},
+            status_code=500
+        )
+
 @app.websocket("/ws/logs")
 async def websocket_logs_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -670,17 +995,15 @@ async def startup_event():
             from src.impact_bridge.config import DatabaseConfig
             from src.impact_bridge.database import init_database
             
-            # Use absolute path to database relative to project root
+            # Use absolute path to database in project root
             project_root = Path(__file__).parent.parent.parent
-            db_dir = project_root / "db"
-            db_dir.mkdir(exist_ok=True)  # Ensure db directory exists
             
             config = DatabaseConfig()
-            config.dir = str(db_dir)
-            config.file = "bridge.db"
+            config.dir = str(project_root)
+            config.file = "leadville.db"
             
             init_database(config)
-            logger.info(f"Database initialized at {db_dir / config.file}")
+            logger.info(f"Database initialized at {config.path}")
         except Exception as e:
             logger.error(f"Database initialization failed: {e}")
         

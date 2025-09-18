@@ -14,6 +14,7 @@ const navigationItems: NavigationItem[] = [
   { path: '/', label: 'Dashboard', icon: '📊' },
   { path: '/timer', label: 'Timer Control', icon: '⏱️' },
   { path: '/sensor', label: 'Sensor Monitor', icon: '📡' },
+  { path: '/stage-setup', label: 'Stage Setup', icon: '🏟️' },
   { path: '/ro', label: 'Range Officer', icon: '🎯' },
   { path: '/console', label: 'Console Logs', icon: '🖥️' },
   { path: '/settings', label: 'Settings', icon: '⚙️' },

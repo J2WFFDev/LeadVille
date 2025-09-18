@@ -8,6 +8,45 @@ import { DeviceManager } from '../components/DeviceManager';
 
 export const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'network' | 'system' | 'devices'>('network');
+  const [isRestarting, setIsRestarting] = useState(false);
+
+  const handleRestartService = async () => {
+    setIsRestarting(true);
+    try {
+      const response = await fetch('/api/admin/services/restart', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        try {
+          const result = await response.json();
+          alert(`Bridge service restart initiated successfully!`);
+        } catch (jsonError) {
+          // JSON parsing failed, but response was OK - restart probably succeeded
+          alert(`Bridge service restart initiated! (Response parsing issue, but restart likely succeeded)`);
+        }
+        
+        // Reset the button state after a delay
+        setTimeout(() => {
+          setIsRestarting(false);
+        }, 5000);
+      } else {
+        try {
+          const error = await response.json();
+          alert(`Failed to restart service: ${error.error || 'Unknown error'}`);
+        } catch (jsonError) {
+          alert(`Failed to restart service: HTTP ${response.status}`);
+        }
+        setIsRestarting(false);
+      }
+    } catch (error) {
+      alert(`Network error: ${error}`);
+      setIsRestarting(false);
+    }
+  };
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -109,6 +148,45 @@ export const SettingsPage: React.FC = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         readOnly
                       />
+                    </div>
+                  </div>
+                </div>
+
+                {/* System Actions */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-medium mb-3">🔧 System Actions</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Bridge Service Control
+                      </label>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Restart the core BLE bridge service that handles sensor communication. 
+                        This will reset all device connections and timing calibrations.
+                      </p>
+                      <button
+                        onClick={handleRestartService}
+                        disabled={isRestarting}
+                        style={{
+                          backgroundColor: isRestarting ? '#d1d5db' : '#f97316',
+                          color: 'white',
+                          padding: '8px 16px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          fontWeight: '600',
+                          fontSize: '14px',
+                          cursor: isRestarting ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        {isRestarting ? (
+                          <>⏳ Restarting...</>
+                        ) : (
+                          <>🔄 Restart Bridge Service</>
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
