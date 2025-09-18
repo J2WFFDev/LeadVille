@@ -221,6 +221,7 @@ class DeviceManager:
                     'last_seen': sensor.last_seen.isoformat() if sensor.last_seen else None,
                     'target_id': sensor.target_id,
                     'target_name': sensor.target.label if sensor.target else None,
+                    'target_config_id': sensor.target_config_id,
                     'status': self._get_device_status(sensor),
                     'created_at': sensor.created_at.isoformat(),
                     'updated_at': sensor.updated_at.isoformat()
