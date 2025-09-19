@@ -19,6 +19,10 @@ from bleak import BleakClient, BleakScanner
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
+# Database imports for Bridge-assigned sensor lookup
+from .database.database import get_database_session
+from .database.models import Bridge, Sensor
+
 # Setup dual logging - both to console and file
 def setup_dual_logging():
     """Setup logging to both console and dedicated log files"""
@@ -70,9 +74,9 @@ except Exception as e:
     print(f"⚠ Component import failed: {e}")
     COMPONENTS_AVAILABLE = False
 
-# Device Configuration
-AMG_TIMER_MAC = "60:09:C3:1F:DC:1A"
-BT50_SENSOR_MAC = "F8:FE:92:31:12:E3"
+# Device Configuration - Now dynamically loaded from Bridge assignments
+# AMG_TIMER_MAC = "60:09:C3:1F:DC:1A"  # Legacy - now loaded from Bridge assignments
+# BT50_SENSOR_MAC = "F8:FE:92:31:12:E3"  # Legacy - now loaded from Bridge assignments
 
 # BLE UUIDs
 AMG_TIMER_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
@@ -202,6 +206,57 @@ class LeadVilleBridge:
         root_logger.setLevel(logging.DEBUG)
         
         self.logger.info(f"Debug logging enabled: {debug_file}")
+    
+    def get_bridge_assigned_devices(self):
+        """Get MAC addresses of devices assigned to this Bridge"""
+        try:
+            with get_database_session() as session:
+                bridge = session.query(Bridge).first()
+                if not bridge or not bridge.current_stage_id:
+                    self.logger.warning("No Bridge or stage assignment found - using default devices")
+                    return {
+                        'timer': "60:09:C3:1F:DC:1A",  # Default AMG timer
+                        'sensors': ["EA:18:3D:6D:BA:E5", "C2:1B:DB:F0:55:50"]  # Default BT50 sensors
+                    }
+                
+                # Get sensors assigned to this Bridge's stage
+                target_config_ids = [target.id for target in bridge.current_stage.target_configs]
+                if not target_config_ids:
+                    self.logger.warning(f"No targets found for stage {bridge.current_stage.name}")
+                    return {'timer': None, 'sensors': []}
+                
+                assigned_sensors = session.query(Sensor).filter(
+                    Sensor.target_config_id.in_(target_config_ids),
+                    Sensor.bridge_id == bridge.id
+                ).all()
+                
+                # Separate timer and impact sensors
+                timer_mac = None
+                sensor_macs = []
+                
+                for sensor in assigned_sensors:
+                    # AMG timers have "AMG" or "COMM" in their label
+                    if any(keyword in sensor.label.upper() for keyword in ['AMG', 'COMM', 'TIMER']):
+                        timer_mac = sensor.hw_addr
+                    elif any(keyword in sensor.label.upper() for keyword in ['BT50', 'WTVB']):
+                        sensor_macs.append(sensor.hw_addr)
+                
+                self.logger.info(f"Bridge '{bridge.name}' assigned to stage '{bridge.current_stage.name}'")
+                self.logger.info(f"Timer: {timer_mac}")
+                self.logger.info(f"Impact Sensors: {sensor_macs}")
+                
+                return {
+                    'timer': timer_mac,
+                    'sensors': sensor_macs
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Failed to get Bridge assignments: {e}")
+            # Fallback to default devices
+            return {
+                'timer': "60:09:C3:1F:DC:1A",
+                'sensors': ["EA:18:3D:6D:BA:E5", "C2:1B:DB:F0:55:50"]
+            }
         
     async def calibration_notification_handler(self, characteristic, data):
         """Handle calibration sample collection"""
@@ -530,40 +585,53 @@ class LeadVilleBridge:
             self.logger.error(f"BLE reset failed: {e}")
     
     async def connect_devices(self):
-        """Connect to both AMG timer and BT50 sensor"""
+        """Connect to Bridge-assigned AMG timer and BT50 sensors"""
         # Perform automatic BLE reset first
         await self.reset_ble()
         
         self.logger.info("📝 Status: Bridge MCU1 - Bridge Initialized")
         
-        try:
-            # Connect AMG Timer
-            self.logger.info("Connecting to AMG timer...")
-            self.amg_client = BleakClient(AMG_TIMER_MAC)
-            await self.amg_client.connect()
-            await self.amg_client.start_notify(AMG_TIMER_UUID, self.amg_notification_handler)
-            self.logger.info("📝 Status: Timer DC:1A - Connected")
-            self.logger.info("AMG timer and shot notifications enabled")
-            
-        except Exception as e:
-            self.logger.error(f"AMG timer connection failed: {e}")
-            
-        try:
-            # Connect BT50 Sensor
-            self.logger.info("Connecting to BT50 sensor...")
-            self.bt50_client = BleakClient(BT50_SENSOR_MAC)
-            await self.bt50_client.connect()
-            self.logger.info("📝 Status: Sensor 12:E3 - Connected")
-            
-            # Perform calibration
-            await asyncio.sleep(1.0)  # Let connection stabilize
-            calibration_success = await self.perform_startup_calibration()
-            
-            if not calibration_success:
-                self.logger.error("❌ Calibration failed - bridge not ready")
+        # Get Bridge-assigned devices
+        assigned_devices = self.get_bridge_assigned_devices()
+        timer_mac = assigned_devices.get('timer')
+        sensor_macs = assigned_devices.get('sensors', [])
+        
+        # Connect AMG Timer if assigned
+        if timer_mac:
+            try:
+                self.logger.info(f"Connecting to assigned timer: {timer_mac}")
+                self.amg_client = BleakClient(timer_mac)
+                await self.amg_client.connect()
+                await self.amg_client.start_notify(AMG_TIMER_UUID, self.amg_notification_handler)
+                self.logger.info(f"📝 Status: Timer {timer_mac[-5:]} - Connected")
+                self.logger.info("AMG timer and shot notifications enabled")
                 
-        except Exception as e:
-            self.logger.error(f"BT50 sensor connection failed: {e}")
+            except Exception as e:
+                self.logger.error(f"AMG timer connection failed: {e}")
+        else:
+            self.logger.warning("No timer assigned to this Bridge")
+            
+        # Connect BT50 Sensors if assigned
+        if sensor_macs:
+            # For now, connect to the first assigned sensor (can be expanded for multiple sensors)
+            primary_sensor_mac = sensor_macs[0]
+            try:
+                self.logger.info(f"Connecting to assigned BT50 sensor: {primary_sensor_mac}")
+                self.bt50_client = BleakClient(primary_sensor_mac)
+                await self.bt50_client.connect()
+                self.logger.info(f"📝 Status: Sensor {primary_sensor_mac[-5:]} - Connected")
+                
+                # Perform calibration
+                await asyncio.sleep(1.0)  # Let connection stabilize
+                calibration_success = await self.perform_startup_calibration()
+                
+                if not calibration_success:
+                    self.logger.error("❌ Calibration failed - bridge not ready")
+                    
+            except Exception as e:
+                self.logger.error(f"BT50 sensor connection failed: {e}")
+        else:
+            self.logger.warning("No BT50 sensors assigned to this Bridge")
             
     async def cleanup(self):
         """Clean up connections and save data"""

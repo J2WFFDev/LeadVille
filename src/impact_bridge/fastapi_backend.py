@@ -747,6 +747,175 @@ def unassign_sensor_from_target(stage_id: int, request: dict):
             status_code=500
         )
 
+# ============================================================================
+# Bridge Configuration Endpoints
+# ============================================================================
+
+@app.get("/api/admin/bridge")
+def get_bridge_config():
+    """Get current Bridge configuration"""
+    try:
+        from .database.models import Bridge
+        from .database.database import get_database_session
+        
+        with get_database_session() as session:
+            # Get the current Bridge (assume single Bridge per instance for now)
+            bridge = session.query(Bridge).first()
+            
+            if not bridge:
+                # Create default Bridge if none exists
+                bridge = Bridge(
+                    name="Default Bridge",
+                    bridge_id="bridge-001",
+                    match_id=None,
+                    match_name=None
+                )
+                session.add(bridge)
+                session.commit()
+                session.refresh(bridge)
+            
+            return JSONResponse(content={
+                "bridge": {
+                    "id": bridge.id,
+                    "name": bridge.name,
+                    "bridge_id": bridge.bridge_id,
+                    "current_stage_id": bridge.current_stage_id,
+                    "current_stage_name": bridge.current_stage.name if bridge.current_stage else None,
+                    "match_id": bridge.match_id,
+                    "match_name": bridge.match_name,
+                    "created_at": bridge.created_at.isoformat(),
+                    "updated_at": bridge.updated_at.isoformat()
+                }
+            })
+    except Exception as e:
+        logger.error(f"Failed to get Bridge config: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get Bridge config: {str(e)}"},
+            status_code=500
+        )
+
+@app.put("/api/admin/bridge")
+def update_bridge_config(request: dict):
+    """Update Bridge configuration"""
+    try:
+        from .database.models import Bridge
+        from .database.database import get_database_session
+        
+        name = request.get("name")
+        bridge_id = request.get("bridge_id")
+        match_id = request.get("match_id")
+        match_name = request.get("match_name")
+        
+        if not name or not bridge_id:
+            return JSONResponse(
+                content={"error": "name and bridge_id are required"},
+                status_code=400
+            )
+        
+        with get_database_session() as session:
+            # Get the current Bridge
+            bridge = session.query(Bridge).first()
+            
+            if not bridge:
+                # Create new Bridge
+                bridge = Bridge(
+                    name=name,
+                    bridge_id=bridge_id,
+                    match_id=match_id,
+                    match_name=match_name
+                )
+                session.add(bridge)
+            else:
+                # Update existing Bridge
+                bridge.name = name
+                bridge.bridge_id = bridge_id
+                bridge.match_id = match_id
+                bridge.match_name = match_name
+            
+            session.commit()
+            session.refresh(bridge)
+            
+            return JSONResponse(content={
+                "status": "success",
+                "message": "Bridge configuration updated",
+                "bridge": {
+                    "id": bridge.id,
+                    "name": bridge.name,
+                    "bridge_id": bridge.bridge_id,
+                    "current_stage_id": bridge.current_stage_id,
+                    "match_id": bridge.match_id,
+                    "match_name": bridge.match_name
+                }
+            })
+    except Exception as e:
+        logger.error(f"Failed to update Bridge config: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to update Bridge config: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/bridge/assign_stage")
+def assign_bridge_to_stage(request: dict):
+    """Assign this Bridge to a specific stage"""
+    try:
+        from .database.models import Bridge, StageConfig, Sensor
+        from .database.database import get_database_session
+        
+        stage_id = request.get("stage_id")
+        
+        if not stage_id:
+            return JSONResponse(
+                content={"error": "stage_id is required"},
+                status_code=400
+            )
+        
+        with get_database_session() as session:
+            # Get the current Bridge
+            bridge = session.query(Bridge).first()
+            if not bridge:
+                return JSONResponse(
+                    content={"error": "Bridge not configured"},
+                    status_code=404
+                )
+            
+            # Verify stage exists
+            stage = session.query(StageConfig).filter_by(id=stage_id).first()
+            if not stage:
+                return JSONResponse(
+                    content={"error": "Stage not found"},
+                    status_code=404
+                )
+            
+            # Update Bridge assignment
+            bridge.current_stage_id = stage_id
+            
+            # Update all sensors assigned to targets in this stage to belong to this Bridge
+            target_ids = [target.id for target in stage.target_configs]
+            if target_ids:
+                session.query(Sensor).filter(
+                    Sensor.target_config_id.in_(target_ids)
+                ).update({"bridge_id": bridge.id}, synchronize_session=False)
+            
+            session.commit()
+            
+            return JSONResponse(content={
+                "status": "success",
+                "message": f"Bridge '{bridge.name}' assigned to stage '{stage.name}'",
+                "assignment": {
+                    "bridge_id": bridge.id,
+                    "bridge_name": bridge.name,
+                    "stage_id": stage.id,
+                    "stage_name": stage.name,
+                    "sensors_updated": len(target_ids) if target_ids else 0
+                }
+            })
+    except Exception as e:
+        logger.error(f"Failed to assign Bridge to stage: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to assign Bridge to stage: {str(e)}"},
+            status_code=500
+        )
+
 @app.websocket("/ws/logs")
 async def websocket_logs_endpoint(websocket: WebSocket):
     await manager.connect(websocket)

@@ -563,19 +563,27 @@ class FixedBridge:
     async def bt50_notification_handler(self, characteristic, data):
         """Handle BT50 sensor notifications with RAW VALUES and shot detection"""
         hex_data = data.hex()
+
+        # Identify which sensor sent this data - use first available sensor for now
+        # TODO: Need to properly map characteristic to sensor
+        sensor_mac = None
+        if self.sensor_mappings:
+            sensor_mac = list(self.sensor_mappings.keys())[0]  # Use first available sensor
         
+        # Final fallback: create a default sensor_mac
+        if not sensor_mac:
+            sensor_mac = "UNKNOWN:SENSOR"
+
         # Log raw data to debug only
-        self.logger.debug(f"BT50 raw: {hex_data[:64]}...")
-        
+        self.logger.debug(f"BT50 raw from {sensor_mac[-5:]}: {hex_data[:64]}...")
+
         if not PARSER_AVAILABLE:
             self.logger.warning("Parser not available, skipping impact detection")
             return
-            
+
         if not self.calibration_complete:
             self.logger.warning("Calibration not complete, skipping detection")
-            return
-            
-        # Use parser but extract raw integer values directly
+            return        # Use parser but extract raw integer values directly
         try:
             result = parse_5561(data)
             if result and result['samples']:

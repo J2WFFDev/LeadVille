@@ -15,7 +15,7 @@ from bleak import BleakScanner, BleakClient
 from bleak.backends.device import BLEDevice
 
 from .database.database import init_database, get_database_session
-from .database.models import Sensor, Node, Target
+from .database.models import Sensor, Node, Target, Bridge
 from .database.crud import SensorCRUD, NodeCRUD
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,29 @@ class DeviceManager:
                 'vendor': 'AMG Labs'
             }
         }
+    
+    def get_current_bridge(self) -> Optional[Bridge]:
+        """Get the current Bridge configuration"""
+        with get_database_session() as session:
+            return session.query(Bridge).first()
+    
+    def get_bridge_assigned_sensors(self) -> List[str]:
+        """Get MAC addresses of sensors assigned to this Bridge"""
+        with get_database_session() as session:
+            bridge = session.query(Bridge).first()
+            if not bridge or not bridge.current_stage_id:
+                return []
+            
+            # Get all sensors assigned to targets in this Bridge's stage
+            target_config_ids = [target.id for target in bridge.current_stage.target_configs]
+            if not target_config_ids:
+                return []
+            
+            sensors = session.query(Sensor).filter(
+                Sensor.target_config_id.in_(target_config_ids)
+            ).all()
+            
+            return [sensor.hw_addr for sensor in sensors]
         
     async def discover_devices(self, duration: int = 10) -> List[Dict[str, Any]]:
         """Discover available BLE devices (filtered to BT50 sensors and AMG timers)"""
@@ -171,23 +194,34 @@ class DeviceManager:
         return False
     
     async def pair_device(self, mac_address: str, label: str) -> Dict[str, Any]:
-        """Pair a discovered device and add to database"""
+        """Pair a discovered device and add to database with Bridge ownership"""
         if mac_address not in self.discovered_devices:
             raise ValueError(f"Device {mac_address} not found in discovered devices")
         
         device_info = self.discovered_devices[mac_address]
         
+        # Get current Bridge
+        current_bridge = self.get_current_bridge()
+        if not current_bridge:
+            raise ValueError("No Bridge configured - cannot pair devices")
+        
         # Check if device is already paired
         with get_database_session() as session:
             existing_sensor = SensorCRUD.get_by_hw_addr(session, mac_address)
             if existing_sensor:
+                # Update Bridge ownership if not set
+                if not existing_sensor.bridge_id:
+                    existing_sensor.bridge_id = current_bridge.id
+                    session.commit()
+                
                 return {
                     'status': 'already_paired',
                     'sensor_id': existing_sensor.id,
-                    'message': f"Device {mac_address} is already paired"
+                    'bridge_id': existing_sensor.bridge_id,
+                    'message': f"Device {mac_address} is already paired to Bridge {current_bridge.name}"
                 }
             
-            # Create new sensor record
+            # Create new sensor record with Bridge ownership
             sensor = SensorCRUD.create(
                 session=session,
                 hw_addr=mac_address,
@@ -195,13 +229,17 @@ class DeviceManager:
                 last_seen=datetime.utcnow(),
                 rssi=device_info.get('rssi')
             )
+            
+            # Assign to current Bridge
+            sensor.bridge_id = current_bridge.id
             session.commit()
             
-            logger.info(f"Successfully paired device {mac_address} as {label}")
+            logger.info(f"Successfully paired device {mac_address} as {label} to Bridge {current_bridge.name}")
             return {
                 'status': 'paired',
                 'sensor_id': sensor.id,
-                'message': f"Device {mac_address} paired successfully"
+                'bridge_id': sensor.bridge_id,
+                'message': f"Device {mac_address} paired successfully to Bridge {current_bridge.name}"
             }
     
     def get_paired_devices(self) -> List[Dict[str, Any]]:

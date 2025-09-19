@@ -5,9 +5,10 @@
 import React, { useState } from 'react';
 import { NetworkManager } from '../components/NetworkManager';
 import { DeviceManager } from '../components/DeviceManager';
+import { BridgeManager } from '../components/BridgeManager';
 
 export const SettingsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'network' | 'system' | 'devices'>('network');
+  const [activeTab, setActiveTab] = useState<'network' | 'system' | 'devices' | 'bridge'>('network');
   const [isRestarting, setIsRestarting] = useState(false);
 
   const handleRestartService = async () => {
@@ -22,11 +23,11 @@ export const SettingsPage: React.FC = () => {
 
       if (response.ok) {
         try {
-          const result = await response.json();
-          alert(`Bridge service restart initiated successfully!`);
+          await response.json();
+          console.log('Bridge service restart initiated successfully');
         } catch (jsonError) {
           // JSON parsing failed, but response was OK - restart probably succeeded
-          alert(`Bridge service restart initiated! (Response parsing issue, but restart likely succeeded)`);
+          console.log('Bridge service restart initiated (response parsing issue, but restart likely succeeded)');
         }
         
         // Reset the button state after a delay
@@ -36,14 +37,14 @@ export const SettingsPage: React.FC = () => {
       } else {
         try {
           const error = await response.json();
-          alert(`Failed to restart service: ${error.error || 'Unknown error'}`);
+          console.error(`Failed to restart service: ${error.error || 'Unknown error'}`);
         } catch (jsonError) {
-          alert(`Failed to restart service: HTTP ${response.status}`);
+          console.error(`Failed to restart service: HTTP ${response.status}`);
         }
         setIsRestarting(false);
       }
     } catch (error) {
-      alert(`Network error: ${error}`);
+      console.error(`Network error: ${error}`);
       setIsRestarting(false);
     }
   };
@@ -66,6 +67,7 @@ export const SettingsPage: React.FC = () => {
             {[
               { id: 'network', label: '🌐 Network', icon: '🌐' },
               { id: 'devices', label: '📡 Devices', icon: '📡' },
+              { id: 'bridge', label: '🌉 Bridge', icon: '🌉' },
               { id: 'system', label: '⚙️ System', icon: '⚙️' }
             ].map((tab) => (
               <button
@@ -94,6 +96,10 @@ export const SettingsPage: React.FC = () => {
 
           {activeTab === 'devices' && (
             <DeviceManager />
+          )}
+
+          {activeTab === 'bridge' && (
+            <BridgeManager />
           )}
 
           {activeTab === 'system' && (
