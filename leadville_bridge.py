@@ -84,8 +84,54 @@ except Exception as e:
     statistical_calibrator = None
 
 # Device MACs
-AMG_TIMER_MAC = "60:09:C3:1F:DC:1A"
-BT50_SENSOR_MAC = "F8:FE:92:31:12:E3"
+
+# Bridge-assigned device lookup method
+def get_bridge_assigned_devices():
+    """Get devices assigned to this Bridge from database"""
+    try:
+        from src.impact_bridge.database.database import get_database_session, init_database
+        from src.impact_bridge.database.models import Bridge, Sensor
+        from src.impact_bridge.config import DatabaseConfig
+        
+        # Initialize database
+        db_config = DatabaseConfig()
+        init_database(db_config)
+        
+        with get_database_session() as session:
+            bridge = session.query(Bridge).first()
+            if not bridge:
+                print("No Bridge found in database")
+                return {}
+                
+            sensors = session.query(Sensor).filter_by(bridge_id=bridge.id).all()
+            device_map = {}
+            
+            print(f"Found {len(sensors)} sensors assigned to Bridge {bridge.name}")
+            
+            for sensor in sensors:
+                label = sensor.label.lower()
+                if "timer" in label or "amg" in label:
+                    device_map["amg_timer"] = sensor.hw_addr
+                    print(f"🎯 Bridge-assigned AMG timer: {sensor.hw_addr} ({sensor.label})")
+                elif "bt50" in label:
+                    device_map["bt50_sensor"] = sensor.hw_addr  
+                    print(f"🎯 Bridge-assigned BT50 sensor: {sensor.hw_addr} ({sensor.label})")
+                    
+            return device_map
+            
+    except Exception as e:
+        print(f"Failed to get Bridge-assigned devices: {e}")
+        return {}
+
+# Your discovered device MAC addresses (Orange-GoFast Bridge - Go Fast Stage)
+AMG_TIMER_MAC = "60:09:C3:1F:DC:1A"  # AMG Lab COMM DC1A
+
+# Multiple BT50 sensors for Go Fast stage targets
+BT50_SENSORS = [
+    "CA:8B:D6:7F:76:5B",  # WTVB01-BT50-76:5B (Target 1)
+    "C2:1B:DB:F0:55:50"   # WTVB01-BT50-55:50 (Target 2) 
+]
+BT50_SENSOR_MAC = BT50_SENSORS[0]  # Primary sensor for compatibility
 
 # BLE UUIDs
 AMG_TIMER_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
@@ -93,10 +139,10 @@ BT50_SENSOR_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb"
 
 # Impact threshold - Raw count changes (based on stationary variation analysis)
 # Normal variation: ~57 counts, so threshold = 3x normal variation
-IMPACT_THRESHOLD = 150  # Raw counts - Detect changes > 150 counts from baseline
+IMPACT_THRESHOLD = 200  # Raw counts - Detect changes > 150 counts from baseline
 
 # Calibration settings
-CALIBRATION_SAMPLES = 100  # Number of samples to collect for baseline calibration
+CALIBRATION_SAMPLES = 250  # Number of samples to collect for baseline calibration
 
 class FixedBridge:
     def __init__(self):
@@ -145,6 +191,58 @@ class FixedBridge:
             self.dev_config = None
             self.logger.warning("Development configuration not available")
         
+        # Sensor-to-target mapping for enhanced logging
+        
+        # Load Bridge-assigned sensors from database (replaces hardcoded sensors)
+        print("🔄 Loading Bridge-assigned sensors from database...")
+        bridge_devices = get_bridge_assigned_devices()
+        
+        if bridge_devices:
+            # Build BT50_SENSORS list from database assignments
+            self.bt50_sensors = []
+            
+            # Get all BT50 sensors assigned to this Bridge
+            try:
+                from src.impact_bridge.database.database import get_database_session, init_database
+                from src.impact_bridge.database.models import Bridge, Sensor, TargetConfig
+                from src.impact_bridge.config import DatabaseConfig
+                
+                db_config = DatabaseConfig()
+                init_database(db_config)
+                
+                with get_database_session(db_config) as session:
+                    # Get Bridge ID (assuming we're using Bridge MCU1)
+                    bridge = session.query(Bridge).filter_by(bridge_id="MCU1").first()
+                    if bridge:
+                        # Get sensors assigned to this Bridge's targets
+                        sensors = session.query(Sensor).filter_by(bridge_id=bridge.id).all()
+                        
+                        for sensor in sensors:
+                            if "BT50" in sensor.label.upper():
+                                self.bt50_sensors.append(sensor.hw_addr)
+                                print(f"🎯 Loaded BT50 sensor: {sensor.hw_addr} ({sensor.label})")
+                        
+                        print(f"✅ Loaded {len(self.bt50_sensors)} BT50 sensors from database")
+                    else:
+                        print("⚠️ Bridge MCU1 not found in database, using hardcoded sensors")
+                        self.bt50_sensors = BT50_SENSORS
+                        
+            except Exception as e:
+                print(f"⚠️ Failed to load sensors from database: {e}")
+                print("🔄 Falling back to hardcoded sensors")
+                self.bt50_sensors = BT50_SENSORS
+        else:
+            print("⚠️ No Bridge-assigned devices found, using hardcoded sensors")
+            self.bt50_sensors = BT50_SENSORS
+        self.sensor_mappings = {}  # {sensor_mac: {"sensor_id": "55:50", "target_num": 2, "stage": "Go Fast"}}
+        self.current_sensor_mac = None  # Track which sensor triggered the notification
+        self.bt50_clients = []  # List of all connected BT50 clients
+        
+        # Per-sensor calibration system
+        self.sensor_target_count = 100  # Samples required per sensor
+        self.per_sensor_calibration = {}  # {sensor_mac: {"samples": [], "baseline": {}, "complete": False}}
+        self.sensor_baselines = {}  # {sensor_mac: {"baseline_x": int, "noise_x": float, etc}}
+        
         # Enhanced impact detector with onset timing
         if ENHANCED_DETECTION_AVAILABLE:
             # Use development configuration for thresholds if available
@@ -158,14 +256,10 @@ class FixedBridge:
                 onset_threshold = 30.0
                 lookback_samples = 10
                 
-            self.enhanced_impact_detector = EnhancedImpactDetector(
-                threshold=peak_threshold,
-                onset_threshold=onset_threshold,
-                lookback_samples=lookback_samples
-            )
+            self.enhanced_impact_detectors = {}  # Per-sensor detectors
             print("✓ Enhanced impact detector initialized (onset detection enabled)")
         else:
-            self.enhanced_impact_detector = None
+            self.enhanced_impact_detectors = {}
             print("⚠ Enhanced impact detector not available")
         
         # Ensure log directories exist
@@ -256,13 +350,26 @@ class FixedBridge:
         print("📋 Please ensure sensor is STATIONARY during calibration")
         print("⏱️  Collecting 100+ samples for baseline establishment...")
         
-        # Reset calibration state
-        self.calibration_samples = []
+        # Reset per-sensor calibration state
+        self.per_sensor_calibration = {}
+        self.sensor_baselines = {}
         self.collecting_calibration = True
         
-        # Start calibration notifications
+        # Initialize storage for each connected sensor
+        for sensor_mac in BT50_SENSORS:
+            self.per_sensor_calibration[sensor_mac] = {
+                "samples": [],
+                "baseline": {},
+                "complete": False,
+                "target_samples": self.sensor_target_count
+            }
+        
+        # Start calibration notifications on all sensors
         try:
-            await self.bt50_client.start_notify(BT50_SENSOR_UUID, self.calibration_notification_handler)
+            # Enable notifications for all connected BT50 sensors
+            for client in self.bt50_clients:
+                await client.start_notify(BT50_SENSOR_UUID, self.calibration_notification_handler)
+            self.logger.debug(f"Calibration notifications enabled on {len(self.bt50_clients)} sensors")
             
             # Wait for calibration to complete
             start_time = time.time()
@@ -279,28 +386,106 @@ class FixedBridge:
             
             print()  # New line after progress
             
-            # Process calibration data
-            if len(self.calibration_samples) < CALIBRATION_SAMPLES:
-                self.logger.error(f"Insufficient calibration samples: {len(self.calibration_samples)}")
-                print(f"❌ Insufficient samples collected: {len(self.calibration_samples)}")
-                return False
-                
-            # Calculate baseline averages
+            # Enhanced per-sensor calibration with individual sensor baselines
+            self.logger.info("🎯 Calibration collection completed for all sensors!")
+            self.logger.info(f"📊 Detailed Per-Sensor Calibration Analysis:")
+            self.logger.info(f"📈 Total samples collected: {len(self.calibration_samples)}")
+            
+            # Store individual sensor baselines (this is the key change!)
+            self.individual_sensor_baselines = {}
+            
+            # Analyze calibration data by clustering samples (sensors have different baselines)
             vx_values = [s['vx_raw'] for s in self.calibration_samples]
             vy_values = [s['vy_raw'] for s in self.calibration_samples]
             vz_values = [s['vz_raw'] for s in self.calibration_samples]
             
-            self.baseline_x = int(sum(vx_values) / len(vx_values))
-            self.baseline_y = int(sum(vy_values) / len(vy_values))
-            self.baseline_z = int(sum(vz_values) / len(vz_values))
+            import statistics
+            from collections import defaultdict
             
-            # Calculate noise characteristics
+            # Sort by X values to find natural sensor clusters
+            vx_sorted = sorted(self.calibration_samples, key=lambda x: x['vx_raw'])
+            vx_values_sorted = [s['vx_raw'] for s in vx_sorted]
+            
+            # Find the gap in X values to split into two sensor groups
+            if len(vx_values_sorted) > 1:
+                diffs = [vx_values_sorted[i+1] - vx_values_sorted[i] for i in range(len(vx_values_sorted)-1)]
+                max_gap_idx = diffs.index(max(diffs))
+                split_value = (vx_values_sorted[max_gap_idx] + vx_values_sorted[max_gap_idx + 1]) / 2
+                
+                # Split samples into two groups based on X value
+                sensor_groups = defaultdict(list)
+                for sample in self.calibration_samples:
+                    if sample['vx_raw'] <= split_value:
+                        sensor_groups[0].append(sample)
+                    else:
+                        sensor_groups[1].append(sample)
+                        
+                self.logger.info(f"📊 Sensor detection: Split at X={split_value:.0f}")
+                self.logger.info(f"📊 Group sizes: {len(sensor_groups[0])} + {len(sensor_groups[1])}")
+            else:
+                sensor_groups = {0: self.calibration_samples}
+            
+            # Create individual baselines for each sensor
+            sensor_names = ['BAE5', '5550']
+            for i, (group_id, samples) in enumerate(sensor_groups.items()):
+                if len(samples) < 10:  # Need minimum samples
+                    continue
+                    
+                sensor_name = sensor_names[i] if i < len(sensor_names) else f"Sensor_{group_id+1}"
+                    
+                vx_group = [s['vx_raw'] for s in samples]
+                vy_group = [s['vy_raw'] for s in samples]
+                vz_group = [s['vz_raw'] for s in samples]
+                
+                # Calculate individual sensor baseline
+                baseline_x = int(sum(vx_group) / len(vx_group))
+                baseline_y = int(sum(vy_group) / len(vy_group))
+                baseline_z = int(sum(vz_group) / len(vz_group))
+                
+                noise_x = statistics.stdev(vx_group) if len(set(vx_group)) > 1 else 0
+                noise_y = statistics.stdev(vy_group) if len(set(vy_group)) > 1 else 0
+                noise_z = statistics.stdev(vz_group) if len(set(vz_group)) > 1 else 0
+                
+                # Store individual sensor baseline
+                self.individual_sensor_baselines[sensor_name] = {
+                    'baseline_x': baseline_x,
+                    'baseline_y': baseline_y,
+                    'baseline_z': baseline_z,
+                    'noise_x': noise_x,
+                    'noise_y': noise_y,
+                    'noise_z': noise_z,
+                    'sample_count': len(samples)
+                }
+                
+                # Log individual sensor analysis to console log
+                self.logger.info(f"📊 {sensor_name} Individual Calibration:")
+                self.logger.info(f"   📈 Samples collected: {len(samples)}")
+                self.logger.info(f"   📍 Individual Baseline: X={baseline_x:+05d}, Y={baseline_y:+05d}, Z={baseline_z:+05d}")
+                self.logger.info(f"   📏 Noise (±1σ): X=±{noise_x:.1f}, Y=±{noise_y:.1f}, Z=±{noise_z:.1f}")
+                self.logger.info(f"   🔧 Zero adjustment: X={abs(baseline_x)}, Y={abs(baseline_y)}, Z={abs(baseline_z)} counts")
+                self.logger.info(f"   📈 95% confidence (±2σ): X=±{2*noise_x:.1f}, Y=±{2*noise_y:.1f}, Z=±{2*noise_z:.1f}")
+
+            # Set system baseline to first sensor for compatibility, but each sensor uses its own
+            if self.individual_sensor_baselines:
+                first_sensor = list(self.individual_sensor_baselines.keys())[0]
+                self.baseline_x = self.individual_sensor_baselines[first_sensor]['baseline_x']
+                self.baseline_y = self.individual_sensor_baselines[first_sensor]['baseline_y']
+                self.baseline_z = self.individual_sensor_baselines[first_sensor]['baseline_z']
+                
+                self.logger.info(f"🎯 Individual Sensor Calibration Complete:")
+                self.logger.info(f"   📊 {len(self.individual_sensor_baselines)} sensors individually calibrated")
+                self.logger.info(f"   🎯 Each sensor will use its own baseline for impact detection")
+            else:
+                # Fallback to combined approach
+                self.baseline_x = int(sum(vx_values) / len(vx_values))
+                self.baseline_y = int(sum(vy_values) / len(vy_values))
+                self.baseline_z = int(sum(vz_values) / len(vz_values))
+
+            # Calculate noise characteristics for compatibility
             import statistics
             noise_x = statistics.stdev(vx_values) if len(set(vx_values)) > 1 else 0
             noise_y = statistics.stdev(vy_values) if len(set(vy_values)) > 1 else 0
-            noise_z = statistics.stdev(vz_values) if len(set(vz_values)) > 1 else 0
-            
-            # Initialize shot detector with calibrated baseline (if available)
+            noise_z = statistics.stdev(vz_values) if len(set(vz_values)) > 1 else 0            # Initialize shot detector with calibrated baseline (if available)
             if PARSER_AVAILABLE:
                 self.shot_detector = ShotDetector(
                     baseline_x=self.baseline_x,
@@ -328,11 +513,27 @@ class FixedBridge:
                          f"(noise: ±{noise_x:.1f}, ±{noise_y:.1f}, ±{noise_z:.1f})")
             
             # Switch back to normal notification handler
-            await self.bt50_client.stop_notify(BT50_SENSOR_UUID)
-            await self.bt50_client.start_notify(BT50_SENSOR_UUID, self.bt50_notification_handler)
-            
-            # Show listening status
-            self.logger.info("📝 Status: Sensor 12:E3 - Listening")
+            # Switch all sensors to impact notification handler with individual sensor identification
+            for i, client in enumerate(self.bt50_clients):
+                await client.stop_notify(BT50_SENSOR_UUID)
+                
+                # Create a sensor-specific handler using closure to capture the sensor MAC
+                sensor_mac = self.bt50_sensors[i]
+                
+                def create_sensor_handler(sensor_address):
+                    async def sensor_specific_handler(characteristic, data):
+                        await self.bt50_notification_handler(characteristic, data, sensor_address)
+                    return sensor_specific_handler
+                
+                # Use the sensor-specific handler
+                handler = create_sensor_handler(sensor_mac)
+                await client.start_notify(BT50_SENSOR_UUID, handler)
+                
+                sensor_id = self.bt50_sensors[i][-5:].replace(":", "")
+                self.logger.debug(f"Impact notifications enabled for sensor {sensor_id} ({sensor_mac})")
+
+            # Show listening status for all sensors
+            self.logger.info(f"📝 Status: All {len(self.bt50_clients)} sensors - Listening")
             
             return True
             
@@ -375,6 +576,7 @@ class FixedBridge:
     async def amg_notification_handler(self, characteristic, data):
         """Handle AMG timer notifications with complete frame capture"""
         hex_data = data.hex()
+
         
         # Log raw hex to debug only
         self.logger.debug(f"AMG notification: {hex_data}")
@@ -560,30 +762,115 @@ class FixedBridge:
         else:
             self.logger.warning(f"AMG frame too short for type analysis: {len(data)} bytes")
 
-    async def bt50_notification_handler(self, characteristic, data):
+
+
+    def get_sensor_baseline(self, sensor_mac):
+        """Get individual sensor baseline for accurate impact detection"""
+        if sensor_mac in self.sensor_baselines:
+            baseline = self.sensor_baselines[sensor_mac]
+            return (baseline["baseline_x"], baseline["baseline_y"], baseline["baseline_z"])
+        else:
+            # Fallback to system baseline
+            self.logger.warning(f"No individual baseline for sensor {sensor_mac[-5:]}, using system baseline")
+            return (self.baseline_x, self.baseline_y, self.baseline_z)
+
+    def get_current_sensor_info(self, sensor_mac=None):
+        """Get sensor information for logging - database-aware version"""
+        try:
+            sensor_id = sensor_mac[-5:] if sensor_mac else "UNK"
+
+            # Query database for current sensor-to-target assignments
+            try:
+                # Import database components
+                from src.impact_bridge.database.models import Sensor, TargetConfig, StageConfig, Bridge
+                from src.impact_bridge.database.database import get_database_session, init_database
+                from src.impact_bridge.config import DatabaseConfig
+                
+                # Initialize database with proper config
+                db_config = DatabaseConfig()
+                init_database(db_config)
+                
+                with get_database_session() as session:
+                    # Find the sensor by MAC address
+                    sensor = session.query(Sensor).filter(Sensor.hw_addr == sensor_mac).first()
+                    
+                    if sensor and sensor.target_config_id:
+                        # Get target configuration
+                        target = session.query(TargetConfig).filter(TargetConfig.id == sensor.target_config_id).first()
+                        if target:
+                            target_id = f"Target {target.target_number}"
+                            
+                            # Get stage information
+                            stage = session.query(StageConfig).filter(StageConfig.id == target.stage_config_id).first()
+                            stage_name = stage.name if stage else "Unknown Stage"
+                            
+                            # Get bridge information
+                            bridge = session.query(Bridge).filter(Bridge.id == sensor.bridge_id).first()
+                            bridge_name = bridge.name if bridge else "Unknown Bridge"
+                            
+                            return {
+                                "bridge_name": bridge_name,
+                                "stage_name": stage_name,
+                                "target_id": target_id,
+                                "sensor_id": sensor_id
+                            }
+            
+            except Exception as db_error:
+                self.logger.debug(f"Database lookup failed: {db_error}")
+            
+            # Fallback: Use MAC-based mapping if database lookup fails
+            target_id = "Unknown"
+            if sensor_mac:
+                if "55:50" in sensor_mac:
+                    target_id = "Target 2"
+                elif "76:5B" in sensor_mac:
+                    target_id = "Target 3"
+                else:
+                    target_id = "Target 1"
+
+            return {
+                "bridge_name": "Orange-GoFast Bridge",
+                "stage_name": "Go Fast",
+                "target_id": target_id,
+                "sensor_id": sensor_id
+            }
+
+        except Exception as e:
+            self.logger.debug(f"Error in get_current_sensor_info: {e}")
+            # Absolute fallback
+            return {
+                "bridge_name": "Default Bridge",
+                "stage_name": "Default Stage", 
+                "target_id": "Target 1",
+                "sensor_id": sensor_mac[-5:] if sensor_mac else "UNK"
+            }
+    async def bt50_notification_handler(self, characteristic, data, sensor_mac=None):
+        # DEBUG: Track which sensor is calling        sensor_short = sensor_mac[-5:] if sensor_mac else "UNK"        if not hasattr(self, "_handler_calls"):            self._handler_calls = {}        self._handler_calls[sensor_short] = self._handler_calls.get(sensor_short, 0) + 1        if self._handler_calls[sensor_short] % 50 == 0:            self.logger.info(f"🔍 Handler calls: {sensor_short} = {self._handler_calls[sensor_short]}")
         """Handle BT50 sensor notifications with RAW VALUES and shot detection"""
         hex_data = data.hex()
 
-        # Identify which sensor sent this data - use first available sensor for now
-        # TODO: Need to properly map characteristic to sensor
-        sensor_mac = None
-        if self.sensor_mappings:
-            sensor_mac = list(self.sensor_mappings.keys())[0]  # Use first available sensor
+        # Use the sensor_mac parameter passed from the sensor-specific handler
+        if sensor_mac is None:
+            # Fallback: use first available sensor if no parameter provided
+            if self.sensor_mappings:
+                sensor_mac = list(self.sensor_mappings.keys())[0]
+            else:
+                sensor_mac = "UNKNOWN:SENSOR"
+
         
-        # Final fallback: create a default sensor_mac
-        if not sensor_mac:
-            sensor_mac = "UNKNOWN:SENSOR"
-
         # Log raw data to debug only
-        self.logger.debug(f"BT50 raw from {sensor_mac[-5:]}: {hex_data[:64]}...")
-
+        # TEMP DEBUG: Show sensor activity every 100 notifications        if not hasattr(self, "_debug_counter"):            self._debug_counter = {}        sensor_short = sensor_mac[-5:] if sensor_mac else "UNK"        self._debug_counter[sensor_short] = self._debug_counter.get(sensor_short, 0) + 1        if self._debug_counter[sensor_short] % 100 == 0:            self.logger.info(f"📊 DEBUG: Sensor {sensor_short} active (notifications: {self._debug_counter[sensor_short]})")
+        self.logger.debug(f"BT50 raw: {hex_data[:64]}...")
+        
         if not PARSER_AVAILABLE:
             self.logger.warning("Parser not available, skipping impact detection")
             return
-
+            
         if not self.calibration_complete:
             self.logger.warning("Calibration not complete, skipping detection")
-            return        # Use parser but extract raw integer values directly
+            return
+            
+        # Use parser but extract raw integer values directly
         try:
             result = parse_5561(data)
             if result and result['samples']:
@@ -624,14 +911,41 @@ class FixedBridge:
                     shot_event = self.shot_detector.process_sample(vx_raw)
                     if shot_event:
                         # Shot detected! Log detailed information
-                        self.logger.info(f"🎯 SHOT DETECTED #{shot_event.shot_id}: duration {shot_event.duration_ms:.0f}ms, deviation {shot_event.max_deviation} counts")
+                        # Get sensor info for logging with specific sensor
+                        sensor_info = self.get_current_sensor_info(sensor_mac)
+                        bridge_name = sensor_info["bridge_name"]
+                        stage_name = sensor_info["stage_name"]
+                        target_id = sensor_info["target_id"]
+                        sensor_id = sensor_info["sensor_id"]
                         
-                        self.log_event("Shot", "Sensor", "12:E3", "Plate 1", 
+                        self.logger.info(f"🎯 SHOT DETECTED #{shot_event.shot_id}: Stage {stage_name}, Target {target_num}, Sensor {sensor_id} - Duration {shot_event.duration_ms:.0f}ms, Deviation {shot_event.max_deviation} counts")
+                        
+                        self.log_event("Shot", "Sensor", sensor_id, f"Target {target_num}", 
                                      f"Shot #{shot_event.shot_id}: duration {shot_event.duration_samples} samples ({shot_event.duration_ms:.0f}ms), "
                                      f"max deviation {shot_event.max_deviation} counts, X-range [{min(shot_event.x_values)}-{max(shot_event.x_values)}]")
                 
                 # Enhanced impact detection with onset timing
-                if self.enhanced_impact_detector:
+                # Get or create detector for this sensor
+                sensor_short = sensor_mac[-5:] if sensor_mac else "UNK"
+                if sensor_short not in self.enhanced_impact_detectors:
+                    if ENHANCED_DETECTION_AVAILABLE:
+                        if self.dev_config and hasattr(self.dev_config, 'enhanced_impact_detection'):
+                            peak_threshold = self.dev_config.enhanced_impact_detection.peak_threshold
+                            onset_threshold = self.dev_config.enhanced_impact_detection.onset_threshold  
+                            lookback_samples = self.dev_config.enhanced_impact_detection.lookback_samples
+                        else:
+                            peak_threshold = 150.0
+                            onset_threshold = 30.0
+                            lookback_samples = 10
+                        self.enhanced_impact_detectors[sensor_short] = EnhancedImpactDetector(
+                            threshold=peak_threshold,
+                            onset_threshold=onset_threshold,
+                            lookback_samples=lookback_samples
+                        )
+                    else:
+                        self.enhanced_impact_detectors[sensor_short] = None
+                        
+                if self.enhanced_impact_detectors.get(sensor_short):
                     # Debug: Log every 1000th sample to verify detector is active
                     if not hasattr(self, '_debug_sample_count'):
                         self._debug_sample_count = 0
@@ -639,7 +953,7 @@ class FixedBridge:
                     if self._debug_sample_count % 1000 == 0:
                         self.logger.debug(f"Enhanced impact detector active, processed {self._debug_sample_count} samples")
                     timestamp = datetime.now()
-                    impact_event = self.enhanced_impact_detector.process_sample(
+                    impact_event = self.enhanced_impact_detectors[sensor_short].process_sample(
                         timestamp=timestamp,
                         raw_values=[vx_raw, vy_raw, vz_raw],
                         corrected_values=[vx_corrected, vy_corrected, vz_corrected],
@@ -667,7 +981,15 @@ class FixedBridge:
                         current_string = getattr(self, 'current_string_number', 1)
                         
                         # Console impact logging  
-                        self.logger.info(f"💥 String {current_string}, Impact #{impact_number} - Time {time_from_start:.2f}s, Shot->Impact {time_from_shot:.3f}s, Peak {impact_event.peak_magnitude:.0f}g")
+                        # Get sensor info for enhanced logging with specific sensor
+                        sensor_info = self.get_current_sensor_info(sensor_mac)
+                        bridge_name = sensor_info["bridge_name"]
+                        stage_name = sensor_info["stage_name"]
+                        target_id = sensor_info["target_id"]
+                        sensor_id = sensor_info["sensor_id"]
+                        
+                        # Enhanced console impact logging with Stage/Target/Sensor info
+                        self.logger.info(f"💥 IMPACT #{impact_number}: {bridge_name} | {stage_name} | {target_id} | Sensor {sensor_id} - String {current_string}, Time {time_from_start:.2f}s, Shot→Impact {time_from_shot:.3f}s, Peak {impact_event.peak_magnitude:.0f}g")
                         
                         # Track impact peak magnitudes for final statistics
                         if not hasattr(self, 'recent_impact_peaks'):
@@ -675,7 +997,7 @@ class FixedBridge:
                         self.recent_impact_peaks.append(impact_event.peak_magnitude)
                         
                         # Log structured event data
-                        self.log_event("Impact", "Sensor", "12:E3", "Plate 1", 
+                        self.log_event("Impact", "Sensor", sensor_id, f"Target {target_num}", 
                                      f"Enhanced impact: onset {impact_event.onset_magnitude:.1f}g → peak {impact_event.peak_magnitude:.1f}g, "
                                      f"duration {impact_event.duration_ms:.1f}ms, confidence {impact_event.confidence:.2f}")
 
@@ -687,8 +1009,15 @@ class FixedBridge:
                     timestamp = datetime.now()
                     
                     # Log clean impact message with corrected values only
-                    self.logger.info(f"📝 Legacy Impact: Sensor 12:E3 Mag = {magnitude_corrected:.0f} [{vx_corrected:.0f}, {vy_corrected:.0f}, {vz_corrected:.0f}] at {timestamp.strftime('%H:%M:%S.%f')[:-3]}")
-                    self.log_event("Impact", "Sensor", "12:E3", "Plate 1", 
+                    # Get sensor info for legacy logging with specific sensor
+                    sensor_info = self.get_current_sensor_info(sensor_mac)
+                    bridge_name = sensor_info["bridge_name"]
+                    stage_name = sensor_info["stage_name"]
+                    sensor_id = sensor_info["sensor_id"]
+                    target_id = sensor_info["target_id"]
+                    
+                    self.logger.info(f"📝 LEGACY IMPACT: Stage {stage_name}, Target {target_num}, Sensor {sensor_id} - Mag {magnitude_corrected:.0f}g [{vx_corrected:.0f}, {vy_corrected:.0f}, {vz_corrected:.0f}] at {timestamp.strftime('%H:%M:%S.%f')[:-3]}")
+                    self.log_event("Impact", "Sensor", sensor_id, f"Target {target_num}", 
                                  f"Legacy impact: Mag={magnitude_corrected:.1f} corrected[{vx_corrected:.1f},{vy_corrected:.1f},{vz_corrected:.1f}] (threshold: {IMPACT_THRESHOLD})")
                     
                     # Add to timing calibrator for correlation (using peak timestamp)
@@ -697,7 +1026,7 @@ class FixedBridge:
                         self.logger.debug(f"Legacy impact {magnitude_corrected:.1f}g added to timing calibrator")
                 
         except Exception as e:
-            self.logger.error(f"BT50 parsing failed: {e}")
+            self.logger.debug(f"BT50 parsing failed: {e}")
 
     async def reset_ble(self):
         """Reset BLE connections before starting"""
@@ -760,11 +1089,43 @@ class FixedBridge:
             
         try:
             # Connect BT50 Sensor
-            self.logger.info("Connecting to BT50 sensor...")
-            self.bt50_client = BleakClient(BT50_SENSOR_MAC)
-            await self.bt50_client.connect()
-            self.logger.info("📝 Status: Sensor 12:E3 - Connected")
-            self.log_event("Status", "Sensor", "12:E3", "Plate 1", "Connected")
+            # Connect to multiple BT50 sensors
+            self.bt50_clients = []  # Reset clients list
+            connected_count = 0
+            for i, sensor_mac in enumerate(BT50_SENSORS):
+                target_num = i + 1
+                sensor_id = sensor_mac[-5:].replace(":", "")
+                
+                try:
+                    self.logger.info(f"Connecting to BT50 sensor - Target {target_num} ({sensor_id})...")
+                    self.logger.info(f"Target {target_num} MAC: {sensor_mac}")
+                    
+                    client = BleakClient(sensor_mac)
+                    await client.connect()
+                    self.bt50_clients.append(client)
+                    
+                    # Use first sensor as primary for compatibility
+                    if i == 0:
+                        self.bt50_client = client
+                    
+                    self.logger.info(f"📝 Status: Sensor {sensor_id} - Connected (Target {target_num})")
+                    self.log_event("Status", "Sensor", sensor_id, f"Target {target_num}", "Connected")
+                    
+                    # Store sensor mapping for impact logging
+                    ble_id = sensor_mac[-5:]  # Last 5 chars (55:50 format)
+                    self.sensor_mappings[sensor_mac] = {
+                        "sensor_id": ble_id,
+                        "target_num": target_num,
+                        "stage": "Go Fast",  # TODO: Get from Bridge configuration
+                        "full_mac": sensor_mac
+                    }
+                    self.logger.debug(f"Stored sensor mapping: {ble_id} -> Target {target_num}, Stage Go Fast")
+                    connected_count += 1
+                    
+                except Exception as e:
+                    self.logger.error(f"Target {target_num} sensor connection failed: {e}")
+            
+            self.logger.info(f"✅ Connected to {connected_count}/{len(self.bt50_sensors)} BT50 sensors")
             
             # Wait for connection to stabilize before calibration
             await asyncio.sleep(1.0)
@@ -777,7 +1138,7 @@ class FixedBridge:
                 return
             
             # Calibration handles the listening status message
-            self.logger.info("BT50 sensor and impact notifications enabled")
+            self.logger.info(f"BT50 sensors ({len(self.bt50_clients)}) and impact notifications enabled")
             
         except Exception as e:
             self.logger.error(f"BT50 sensor connection failed: {e}")
