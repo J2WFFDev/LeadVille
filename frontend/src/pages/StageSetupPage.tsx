@@ -46,6 +46,15 @@ interface Sensor {
   battery: number | null;
   rssi: number | null;
   assigned: boolean;
+  bridge_id?: number;
+}
+
+interface Bridge {
+  id: number;
+  name: string;
+  hardware_id: string;
+  stage_id?: number;
+  stage_name?: string;
 }
 
 export const StageSetupPage: React.FC = () => {
@@ -55,14 +64,22 @@ export const StageSetupPage: React.FC = () => {
   const [selectedStage, setSelectedStage] = useState<Stage | null>(null);
   const [stageDetails, setStageDetails] = useState<any>(null);
   const [availableSensors, setAvailableSensors] = useState<Sensor[]>([]);
+  const [bridge, setBridge] = useState<Bridge | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load leagues on component mount
+  // Load leagues and bridge config on component mount
   useEffect(() => {
     loadLeagues();
-    loadAvailableSensors();
+    loadBridgeConfig();
   }, []);
+
+  // Load sensors after bridge config is loaded
+  useEffect(() => {
+    if (bridge) {
+      loadAvailableSensors();
+    }
+  }, [bridge]);
 
   // Load stages when league is selected
   useEffect(() => {
@@ -132,15 +149,32 @@ export const StageSetupPage: React.FC = () => {
     }
   };
 
+  const loadBridgeConfig = async () => {
+    try {
+      const response = await fetch('/api/admin/bridge');
+      if (response.ok) {
+        const bridgeData = await response.json();
+        setBridge(bridgeData);
+      } else {
+        console.error('Failed to load Bridge configuration');
+      }
+    } catch (error) {
+      console.error('Error loading Bridge configuration:', error);
+    }
+  };
+
   const loadAvailableSensors = async () => {
     try {
       const response = await fetch('/api/admin/devices');
       const data = await response.json();
       
       if (response.ok) {
-        // Show all paired sensors
+        // Filter sensors assigned to this Bridge
         const sensors = data.devices
-          .filter((device: any) => device.type === 'sensor')
+          .filter((device: any) => {
+            return device.type === 'sensor' && 
+                   (!bridge || device.bridge_id === bridge.id);
+          })
           .map((device: any) => ({
             id: device.id,
             hw_addr: device.address || device.hw_addr,
@@ -148,7 +182,8 @@ export const StageSetupPage: React.FC = () => {
             last_seen: device.last_seen,
             battery: device.battery,
             rssi: device.rssi,
-            assigned: device.target_config_id !== null
+            assigned: device.target_config_id !== null,
+            bridge_id: device.bridge_id
           }));
         
         setAvailableSensors(sensors);
@@ -319,12 +354,34 @@ export const StageSetupPage: React.FC = () => {
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
-          🎯 Stage Setup
-        </h1>
-        <p style={{ color: '#6b7280', marginTop: '8px' }}>
-          Configure stages and assign sensors to targets
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
+              🎯 Stage Setup
+            </h1>
+            <p style={{ color: '#6b7280', marginTop: '8px' }}>
+              Configure stages and assign sensors to targets
+            </p>
+          </div>
+          {bridge && (
+            <div style={{
+              backgroundColor: '#dbeafe',
+              border: '1px solid #93c5fd',
+              borderRadius: '8px',
+              padding: '12px',
+              minWidth: '200px'
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e40af' }}>
+                🌉 {bridge.name}
+              </div>
+              {bridge.stage_name && (
+                <div style={{ fontSize: '12px', color: '#3730a3', marginTop: '4px' }}>
+                  Assigned to: {bridge.stage_name}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (

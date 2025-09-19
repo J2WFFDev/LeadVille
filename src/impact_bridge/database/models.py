@@ -55,6 +55,7 @@ class StageConfig(Base):
     # Relationships
     league = relationship("League", back_populates="stage_configs")
     target_configs = relationship("TargetConfig", back_populates="stage_config", cascade="all, delete-orphan")
+    assigned_bridges = relationship("Bridge", back_populates="current_stage")
     
     __table_args__ = (
         Index('idx_stage_config_league', 'league_id'),
@@ -124,6 +125,32 @@ class Node(Base):
     )
 
 
+class Bridge(Base):
+    """Bridge identity and stage assignment for match management"""
+    __tablename__ = 'bridges'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)  # User-friendly name (e.g., "Bridge A", "Red Bridge")
+    bridge_id = Column(String(50), nullable=False, unique=True)  # Unique Bridge identifier
+    current_stage_id = Column(Integer, ForeignKey('stage_configs.id'), nullable=True)  # Current stage assignment
+    match_id = Column(String(100), nullable=True)  # Match identifier for future keystone architecture
+    match_name = Column(String(200), nullable=True)  # Match name for display
+    node_id = Column(Integer, ForeignKey('nodes.id'), nullable=True)  # Physical Pi node
+    created_at = Column(DateTime, nullable=False, default=func.now())
+    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    current_stage = relationship("StageConfig", back_populates="assigned_bridges")
+    node = relationship("Node", backref="bridge")
+    sensors = relationship("Sensor", back_populates="bridge", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index('idx_bridge_name', 'name'),
+        Index('idx_bridge_id', 'bridge_id'),
+        Index('idx_bridge_stage', 'current_stage_id'),
+    )
+
+
 class Sensor(Base):
     """BLE sensor device information"""
     __tablename__ = 'sensors'
@@ -134,6 +161,7 @@ class Sensor(Base):
     node_id = Column(Integer, ForeignKey('nodes.id'), nullable=True)
     target_id = Column(Integer, ForeignKey('targets.id'), nullable=True)  # For match-specific assignments
     target_config_id = Column(Integer, ForeignKey('target_configs.id'), nullable=True)  # For stage configuration
+    bridge_id = Column(Integer, ForeignKey('bridges.id'), nullable=True)  # Bridge ownership for exclusive connections
     calib = Column(JSON, nullable=True)  # Calibration data
     last_seen = Column(DateTime, nullable=True)
     battery = Column(Integer, nullable=True)  # Battery percentage
@@ -145,6 +173,7 @@ class Sensor(Base):
     node = relationship("Node", back_populates="sensors")
     target = relationship("Target", back_populates="sensor")
     target_config = relationship("TargetConfig", back_populates="sensors")
+    bridge = relationship("Bridge", back_populates="sensors")
     sensor_events = relationship("SensorEvent", back_populates="sensor", cascade="all, delete-orphan")
     
     __table_args__ = (
@@ -153,6 +182,7 @@ class Sensor(Base):
         Index('idx_sensor_hw_addr', 'hw_addr'),
         Index('idx_sensor_target', 'target_id'),
         Index('idx_sensor_target_config', 'target_config_id'),
+        Index('idx_sensor_bridge', 'bridge_id'),
         Index('idx_sensor_last_seen', 'last_seen'),
     )
 
