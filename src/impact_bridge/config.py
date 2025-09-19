@@ -42,8 +42,8 @@ class LoggingConfig:
 class DatabaseConfig:
     """Configuration for database and data ingest."""
     
-    dir: str = "./db"
-    file: str = "bridge.db"
+    dir: str = "."
+    file: str = "leadville.db"
     enable_ingest: bool = True
     echo: bool = False  # SQLAlchemy echo for debugging
     
