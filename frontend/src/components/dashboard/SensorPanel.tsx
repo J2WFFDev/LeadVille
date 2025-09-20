@@ -73,7 +73,7 @@ export const SensorPanel: React.FC = () => {
         </div>
 
         {/* Threshold Settings */}
-        <div className="bg-gray-50 rounded-lg p-4">
+        <div className="bg-gray-100 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-gray-700">Detection Threshold</span>
             <span className="text-lg font-mono font-bold text-leadville-primary">
@@ -99,7 +99,7 @@ export const SensorPanel: React.FC = () => {
           <h4 className="text-sm font-semibold text-gray-700 mb-3">WebSocket Activity</h4>
           <div className="space-y-2 max-h-32 overflow-y-auto">
             {messages.slice(-3).reverse().map((message, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-100 rounded-lg text-sm">
                 <div className="font-medium text-gray-700">
                   {message.type.replace('_', ' ').toUpperCase()}
                 </div>

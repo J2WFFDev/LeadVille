@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""
+Fix calibration processing to use per-sensor data instead of old single-sensor approach
+"""
+
+# First, backup the current file
+import shutil
+shutil.copy("leadville_bridge.py", "leadville_bridge_backup.py")
+
+# Read the current file
+with open("leadville_bridge.py", "r") as f:
+    content = f.read()
+
+# Find and replace the calibration processing section
+old_processing = """            # Process per-sensor calibration data - validation moved to processing section
+            print()  # New line after progress
+            print(f"\\n🎯 Calibration collection completed for all sensors!")
+
+            # Calculate baseline averages
+            vx_values = [s['vx_raw'] for s in self.calibration_samples]
+            vy_values = [s['vy_raw'] for s in self.calibration_samples]
+            vz_values = [s['vz_raw'] for s in self.calibration_samples]
+
+            self.baseline_x = int(sum(vx_values) / len(vx_values))
+            self.baseline_y = int(sum(vy_values) / len(vy_values))
+            self.baseline_z = int(sum(vz_values) / len(vz_values))
+
+            # Calculate noise characteristics
+            import statistics
+            noise_x = statistics.stdev(vx_values) if len(set(vx_values)) > 1 else 0
+            noise_y = statistics.stdev(vy_values) if len(set(vy_values)) > 1 else 0
+            noise_z = statistics.stdev(vz_values) if len(set(vz_values)) > 1 else 0"""
+
+new_processing = """            # Process per-sensor calibration data
+            print()  # New line after progress
+            print(f"\\n🎯 Calibration collection completed for all sensors!")
+            
+            # Process each sensor's calibration data
+            print(f"\\n📊 Per-Sensor Calibration Results:")
+            all_vx_values = []
+            all_vy_values = []
+            all_vz_values = []
+            
+            for sensor_mac, sensor_data in self.per_sensor_calibration.items():
+                if not sensor_data.get("complete", False):
+                    print(f"⚠️  Sensor {sensor_mac[-5:]} calibration incomplete")
+                    continue
+                    
+                samples = sensor_data["samples"]
+                if len(samples) < 50:  # Minimum samples required
+                    print(f"⚠️  Sensor {sensor_mac[-5:]} insufficient samples: {len(samples)}")
+                    continue
+                
+                # Calculate per-sensor baseline
+                vx_values = [s['vx_raw'] for s in samples]
+                vy_values = [s['vy_raw'] for s in samples]
+                vz_values = [s['vz_raw'] for s in samples]
+                
+                baseline_x = int(sum(vx_values) / len(vx_values))
+                baseline_y = int(sum(vy_values) / len(vy_values))
+                baseline_z = int(sum(vz_values) / len(vz_values))
+                
+                # Calculate noise characteristics
+                import statistics
+                noise_x = statistics.stdev(vx_values) if len(set(vx_values)) > 1 else 0
+                noise_y = statistics.stdev(vy_values) if len(set(vy_values)) > 1 else 0
+                noise_z = statistics.stdev(vz_values) if len(set(vz_values)) > 1 else 0
+                
+                # Store sensor baseline
+                self.sensor_baselines[sensor_mac] = {
+                    "baseline_x": baseline_x,
+                    "baseline_y": baseline_y,
+                    "baseline_z": baseline_z,
+                    "noise_x": noise_x,
+                    "noise_y": noise_y,
+                    "noise_z": noise_z,
+                    "sample_count": len(samples)
+                }
+                
+                print(f"📊 Sensor {sensor_mac[-5:]}: X={baseline_x:+5d}, Y={baseline_y:+5d}, Z={baseline_z:+5d} "
+                      f"(noise: ±{noise_x:.1f}, ±{noise_y:.1f}, ±{noise_z:.1f}) [{len(samples)} samples]")
+                
+                # Add to combined dataset for fallback
+                all_vx_values.extend(vx_values)
+                all_vy_values.extend(vy_values)
+                all_vz_values.extend(vz_values)
+            
+            # Calculate combined baseline for compatibility
+            if all_vx_values:
+                self.baseline_x = int(sum(all_vx_values) / len(all_vx_values))
+                self.baseline_y = int(sum(all_vy_values) / len(all_vy_values))
+                self.baseline_z = int(sum(all_vz_values) / len(all_vz_values))
+                
+                # Combined noise characteristics
+                import statistics
+                noise_x = statistics.stdev(all_vx_values) if len(set(all_vx_values)) > 1 else 0
+                noise_y = statistics.stdev(all_vy_values) if len(set(all_vy_values)) > 1 else 0
+                noise_z = statistics.stdev(all_vz_values) if len(set(all_vz_values)) > 1 else 0
+                
+                print(f"📊 Combined: X={self.baseline_x:+5d}, Y={self.baseline_y:+5d}, Z={self.baseline_z:+5d} "
+                      f"(noise: ±{noise_x:.1f}, ±{noise_y:.1f}, ±{noise_z:.1f}) [{len(all_vx_values)} total samples]")
+            else:
+                print(f"❌ No valid calibration data found!")
+                return False"""
+
+# Replace the processing section
+if old_processing in content:
+    content = content.replace(old_processing, new_processing)
+    print("✅ Updated calibration processing section to use per-sensor data")
+else:
+    print("❌ Could not find calibration processing section to replace")
+    exit(1)
+
+# Write the updated file
+with open("leadville_bridge.py", "w") as f:
+    f.write(content)
+
+print("✅ Fixed calibration processing - now uses per-sensor calibration data")
+print("✅ Each sensor will show individual baseline and noise characteristics")
+print("✅ Combined baseline maintained for compatibility")

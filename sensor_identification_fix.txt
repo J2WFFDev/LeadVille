@@ -1,0 +1,11 @@
+        # Identify which sensor sent this data - use first available sensor for now
+        sensor_mac = None
+        if self.sensor_mappings:
+            sensor_mac = list(self.sensor_mappings.keys())[0]  # Use first available sensor
+        
+        # Final fallback: create a default sensor_mac
+        if not sensor_mac:
+            sensor_mac = "UNKNOWN:SENSOR"
+
+        # Log raw data to debug only
+        self.logger.debug(f"BT50 raw from {sensor_mac[-5:]}: {hex_data[:64]}...")

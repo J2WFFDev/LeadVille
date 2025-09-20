@@ -1,0 +1,182 @@
+            # Enhanced per-sensor calibration with individual sensor baselines
+            self.logger.info("🎯 Calibration collection completed for all sensors!")
+            self.logger.info(f"📊 Detailed Per-Sensor Calibration Analysis:")
+            self.logger.info(f"📈 Total samples collected: {len(self.calibration_samples)}")
+            
+            # First, modify the calibration collection to get 100 samples PER sensor
+            # Check if we have enough samples for proper per-sensor analysis
+            if len(self.calibration_samples) < 200:  # Should have ~100 per sensor minimum
+                self.logger.warning(f"⚠️ Only {len(self.calibration_samples)} samples collected - need ~200 for dual sensors")
+                self.logger.warning("⚠️ Continuing with available samples...")
+            
+            # Analyze calibration data by clustering samples (sensors typically have different baseline characteristics)
+            vx_values = [s['vx_raw'] for s in self.calibration_samples]
+            vy_values = [s['vy_raw'] for s in self.calibration_samples]
+            vz_values = [s['vz_raw'] for s in self.calibration_samples]
+            
+            # Enhanced sensor detection using value clustering instead of time clustering
+            import statistics
+            from collections import defaultdict
+            
+            # Try to identify sensors by X-axis value clustering (each sensor has different baseline)
+            # Sort samples by vx_raw value to find natural clusters
+            vx_sorted = sorted(self.calibration_samples, key=lambda x: x['vx_raw'])
+            
+            # Find the gap in X values to split into two sensor groups
+            vx_values_sorted = [s['vx_raw'] for s in vx_sorted]
+            
+            # Calculate differences between consecutive values
+            if len(vx_values_sorted) > 1:
+                diffs = [vx_values_sorted[i+1] - vx_values_sorted[i] for i in range(len(vx_values_sorted)-1)]
+                max_gap_idx = diffs.index(max(diffs))
+                split_value = (vx_values_sorted[max_gap_idx] + vx_values_sorted[max_gap_idx + 1]) / 2
+                
+                # Split samples into two groups based on X value
+                sensor_groups = defaultdict(list)
+                for sample in self.calibration_samples:
+                    if sample['vx_raw'] <= split_value:
+                        sensor_groups[0].append(sample)
+                    else:
+                        sensor_groups[1].append(sample)
+                        
+                self.logger.info(f"📊 Sensor detection: Split at X={split_value:.0f}")
+            else:
+                # Fallback: all samples in one group
+                sensor_groups = {0: self.calibration_samples}
+                self.logger.info(f"📊 Sensor detection: Single sensor pattern detected")
+            
+            # Also try timing-based detection as secondary method
+            sorted_samples = sorted(self.calibration_samples, key=lambda x: x['timestamp'])
+            time_groups = defaultdict(list)
+            
+            # Simple time-based grouping with smaller intervals
+            current_group = 0
+            time_groups[current_group].append(sorted_samples[0])
+            
+            for i in range(1, len(sorted_samples)):
+                delta = sorted_samples[i]['timestamp'] - sorted_samples[i-1]['timestamp']
+                
+                # Switch groups based on time patterns (sensors may alternate)
+                if delta > 0.05:  # 50ms gap suggests sensor switch
+                    current_group = 1 - current_group
+                    
+                time_groups[current_group].append(sorted_samples[i])
+            
+            self.logger.info(f"📊 Time-based groups: {len(time_groups[0])} + {len(time_groups.get(1, []))}")
+            self.logger.info(f"📊 Value-based groups: {len(sensor_groups[0])} + {len(sensor_groups.get(1, []))}")
+            
+            # Use the grouping method that gives more balanced results
+            if len(sensor_groups) == 2 and min(len(sensor_groups[0]), len(sensor_groups[1])) > 5:
+                selected_groups = sensor_groups
+                detection_method = "Value clustering"
+            elif len(time_groups) == 2 and min(len(time_groups[0]), len(time_groups.get(1, []))) > 5:
+                selected_groups = time_groups
+                detection_method = "Time pattern"
+            else:
+                # Fallback: create artificial split for analysis
+                mid_point = len(self.calibration_samples) // 2
+                selected_groups = {
+                    0: self.calibration_samples[:mid_point],
+                    1: self.calibration_samples[mid_point:]
+                }
+                detection_method = "Sequential split"
+            
+            self.logger.info(f"📊 Using {detection_method} for sensor separation")
+            
+            # Store individual sensor baselines (this is the key change!)
+            self.individual_sensor_baselines = {}
+            
+            # Analyze each sensor group and create individual baselines
+            sensor_stats = {}
+            sensor_names = ['BAE5', '5550']  # Known sensor identifiers
+            
+            for i, (group_id, samples) in enumerate(selected_groups.items()):
+                if len(samples) < 5:  # Skip groups with too few samples
+                    continue
+                    
+                sensor_name = sensor_names[i] if i < len(sensor_names) else f"Sensor_{group_id+1}"
+                    
+                vx_group = [s['vx_raw'] for s in samples]
+                vy_group = [s['vy_raw'] for s in samples]
+                vz_group = [s['vz_raw'] for s in samples]
+                
+                # Calculate statistics for this sensor group
+                baseline_x = int(sum(vx_group) / len(vx_group))
+                baseline_y = int(sum(vy_group) / len(vy_group))
+                baseline_z = int(sum(vz_group) / len(vz_group))
+                
+                noise_x = statistics.stdev(vx_group) if len(set(vx_group)) > 1 else 0
+                noise_y = statistics.stdev(vy_group) if len(set(vy_group)) > 1 else 0
+                noise_z = statistics.stdev(vz_group) if len(set(vz_group)) > 1 else 0
+                
+                # Store individual sensor baseline for this specific sensor
+                self.individual_sensor_baselines[sensor_name] = {
+                    'baseline_x': baseline_x,
+                    'baseline_y': baseline_y,
+                    'baseline_z': baseline_z,
+                    'noise_x': noise_x,
+                    'noise_y': noise_y,
+                    'noise_z': noise_z,
+                    'sample_count': len(samples)
+                }
+                
+                # Store sensor statistics for display
+                sensor_stats[group_id] = {
+                    'name': sensor_name,
+                    'samples': len(samples),
+                    'baseline_x': baseline_x,
+                    'baseline_y': baseline_y,
+                    'baseline_z': baseline_z,
+                    'noise_x': noise_x,
+                    'noise_y': noise_y,
+                    'noise_z': noise_z,
+                    'vx_range': (min(vx_group), max(vx_group)),
+                    'vy_range': (min(vy_group), max(vy_group)),
+                    'vz_range': (min(vz_group), max(vz_group))
+                }
+                
+                # Log individual sensor analysis to console log
+                self.logger.info(f"📊 {sensor_name} Sensor Analysis:")
+                self.logger.info(f"   📈 Samples collected: {len(samples)}")
+                self.logger.info(f"   📍 Baseline: X={baseline_x:+05d}, Y={baseline_y:+05d}, Z={baseline_z:+05d}")
+                self.logger.info(f"   📏 Noise (±1σ): X=±{noise_x:.1f}, Y=±{noise_y:.1f}, Z=±{noise_z:.1f}")
+                self.logger.info(f"   📊 Raw ranges: X={vx_group and (min(vx_group), max(vx_group))}, Y={(min(vy_group), max(vy_group))}, Z={(min(vz_group), max(vz_group))}")
+                
+                # Calculate adjustment needed from zero
+                adj_x = abs(baseline_x)
+                adj_y = abs(baseline_y) 
+                adj_z = abs(baseline_z)
+                self.logger.info(f"   🔧 Zero adjustment: X={adj_x}, Y={adj_y}, Z={adj_z} counts")
+                
+                # Confidence intervals (±2σ = ~95% confidence)
+                conf_x = 2 * noise_x
+                conf_y = 2 * noise_y
+                conf_z = 2 * noise_z
+                self.logger.info(f"   📈 95% confidence (±2σ): X=±{conf_x:.1f}, Y=±{conf_y:.1f}, Z=±{conf_z:.1f}")
+
+            # Set system baseline to the first sensor's baseline (or average if needed for compatibility)
+            # But the key is that individual sensors will use their own baselines
+            if self.individual_sensor_baselines:
+                first_sensor = list(self.individual_sensor_baselines.keys())[0]
+                self.baseline_x = self.individual_sensor_baselines[first_sensor]['baseline_x']
+                self.baseline_y = self.individual_sensor_baselines[first_sensor]['baseline_y']
+                self.baseline_z = self.individual_sensor_baselines[first_sensor]['baseline_z']
+                
+                self.logger.info(f"📊 Individual Sensor Calibration Complete:")
+                self.logger.info(f"   🎯 Each sensor will use its own individual baseline for impact detection")
+                self.logger.info(f"   📊 {len(self.individual_sensor_baselines)} sensors individually calibrated")
+                
+                # Show all individual baselines
+                for sensor_name, baseline_data in self.individual_sensor_baselines.items():
+                    self.logger.info(f"   📍 {sensor_name}: X={baseline_data['baseline_x']:+05d}, Y={baseline_data['baseline_y']:+05d}, Z={baseline_data['baseline_z']:+05d}")
+            else:
+                # Fallback to combined approach
+                self.baseline_x = int(sum(vx_values) / len(vx_values))
+                self.baseline_y = int(sum(vy_values) / len(vy_values))
+                self.baseline_z = int(sum(vz_values) / len(vz_values))
+                self.logger.warning("⚠️ Could not separate sensors - using combined calibration")
+
+            # Calculate combined noise characteristics for system monitoring
+            noise_x = statistics.stdev(vx_values) if len(set(vx_values)) > 1 else 0
+            noise_y = statistics.stdev(vy_values) if len(set(vy_values)) > 1 else 0
+            noise_z = statistics.stdev(vz_values) if len(set(vz_values)) > 1 else 0

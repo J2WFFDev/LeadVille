@@ -1,0 +1,1218 @@
+"""
+LeadVille FastAPI Backend (initial scaffold)
+Mirrors Flask API structure for health and logs endpoints, CORS, and log parsing.
+"""
+
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pathlib import Path
+from datetime import datetime
+import os
+import json
+import glob
+import sys
+import logging
+from typing import List, Dict, Any
+
+logger = logging.getLogger(__name__)
+
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        await websocket.send_text(message)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                # Remove dead connections
+                self.active_connections.remove(connection)
+
+manager = ConnectionManager()
+
+app = FastAPI(title="LeadVille Impact Bridge API", version="2.0.0")
+
+# Enable CORS for all domains
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Log directories for original LeadVille structure
+LOG_DIRS = [
+    str(project_root / "logs/console"),
+    str(project_root / "logs/debug"),
+    str(project_root / "logs/main"),
+]
+
+@app.get("/api/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "project": "LeadVille Impact Bridge",
+        "version": "2.0.0"
+    }
+
+@app.get("/api/logs")
+def get_logs(limit: int = 100):
+    logs = fetch_logs(limit)
+    return JSONResponse(content=logs)
+
+@app.get("/api/admin/network")
+def get_network_status():
+    """Get current network status and configuration"""
+    try:
+        from src.impact_bridge.network_manager import NetworkManager
+        nm = NetworkManager()
+        status = nm.get_network_status()
+        return JSONResponse(content=status)
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"Failed to get network status: {str(e)}"},
+            status_code=500
+        )
+
+from pydantic import BaseModel
+
+class NetworkRequest(BaseModel):
+    mode: str
+    ssid: str = None
+    password: str = None
+
+@app.post("/api/admin/network")
+def switch_network_mode(request: NetworkRequest):
+    """Switch network mode between online and offline"""
+    try:
+        from src.impact_bridge.network_manager import NetworkManager
+        nm = NetworkManager()
+        
+        mode = request.mode
+        if mode == "online":
+            ssid = request.ssid
+            password = request.password
+            if not ssid or not password:
+                return JSONResponse(
+                    content={"error": "SSID and password required for online mode"},
+                    status_code=400
+                )
+            success = nm.switch_to_online_mode(ssid, password)
+        elif mode == "offline":
+            success = nm.switch_to_offline_mode()
+        else:
+            return JSONResponse(
+                content={"error": "Invalid mode. Use 'online' or 'offline'"},
+                status_code=400
+            )
+        
+        if success:
+            return JSONResponse(content={"status": "success", "mode": mode})
+        else:
+            return JSONResponse(
+                content={"error": f"Failed to switch to {mode} mode"},
+                status_code=500
+            )
+            
+    except Exception as e:
+            return JSONResponse(
+                content={"error": f"Network switch failed: {str(e)}"},
+                status_code=500
+            )
+
+@app.get("/api/admin/system")
+def get_system_stats():
+    """Get system monitoring statistics"""
+    try:
+        from src.impact_bridge.system_monitor import SystemMonitor
+        monitor = SystemMonitor()
+        stats = monitor.get_system_stats()
+        return JSONResponse(content=stats)
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"Failed to get system stats: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/admin/services")
+def get_service_health():
+    """Get service health status"""
+    try:
+        from src.impact_bridge.system_monitor import SystemMonitor
+        monitor = SystemMonitor()
+        services = monitor.get_service_health()
+        return JSONResponse(content=services)
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"Failed to get service health: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/services/restart")
+async def restart_bridge_service():
+    """Restart the leadville-bridge service (core BLE bridge, not the API)"""
+    try:
+        import subprocess
+        import asyncio
+        from datetime import datetime
+        
+        # Schedule restart with a small delay to allow response to be sent
+        async def delayed_restart():
+            await asyncio.sleep(2)  # Give time for response to be sent
+            try:
+                result = subprocess.run(['/usr/bin/sudo', '/usr/bin/systemctl', 'restart', 'leadville-bridge'], 
+                                      check=True, capture_output=True, text=True)
+                logger.info("Bridge service restart initiated successfully")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to restart bridge service: {e.returncode} - stdout: {e.stdout} - stderr: {e.stderr}")
+        
+        # Schedule the restart
+        asyncio.create_task(delayed_restart())
+        
+        return JSONResponse(content={
+            "status": "restart_initiated",
+            "message": "Bridge service restart initiated. Service will restart in 2 seconds.",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"Failed to restart service: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/admin/ble")
+def get_ble_quality():
+    """Get BLE connection quality and status"""
+    try:
+        from src.impact_bridge.system_monitor import SystemMonitor
+        monitor = SystemMonitor()
+        ble_status = monitor.get_ble_quality()
+        return JSONResponse(content=ble_status)
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"Failed to get BLE status: {str(e)}"},
+            status_code=500
+        )
+
+# =============================================================================
+# Device Management API Endpoints
+# =============================================================================
+
+@app.get("/api/admin/devices")
+async def get_devices():
+    """Get all paired devices"""
+    try:
+        from src.impact_bridge.device_manager import device_manager
+        devices = device_manager.get_paired_devices()
+        return JSONResponse(content={
+            "devices": devices,
+            "count": len(devices)
+        })
+    except Exception as e:
+        logger.error(f"Error getting devices: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get devices: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/devices/discover")
+async def discover_devices(duration: int = 10):
+    """Discover available BLE devices"""
+    try:
+        from src.impact_bridge.device_manager import device_manager
+        devices = await device_manager.discover_devices(duration)
+        return JSONResponse(content={
+            "discovered_devices": devices,
+            "count": len(devices),
+            "scan_duration": duration
+        })
+    except ValueError as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=400
+        )
+    except Exception as e:
+        logger.error(f"Error discovering devices: {e}")
+        return JSONResponse(
+            content={"error": f"Device discovery failed: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/devices/pair")
+async def pair_device(request: Request):
+    """Pair a discovered device"""
+    try:
+        data = await request.json()
+        mac_address = data.get("mac_address")
+        label = data.get("label")
+        
+        if not mac_address or not label:
+            return JSONResponse(
+                content={"error": "mac_address and label are required"},
+                status_code=400
+            )
+        
+        from src.impact_bridge.device_manager import device_manager
+        result = await device_manager.pair_device(mac_address, label)
+        return JSONResponse(content=result)
+        
+    except ValueError as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=400
+        )
+    except Exception as e:
+        logger.error(f"Error pairing device: {e}")
+        return JSONResponse(
+            content={"error": f"Device pairing failed: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/devices/{sensor_id}/assign")
+async def assign_device_to_target(sensor_id: int, request: Request):
+    """Assign a device to a target"""
+    try:
+        data = await request.json()
+        target_id = data.get("target_id")
+        
+        if target_id is None:
+            return JSONResponse(
+                content={"error": "target_id is required"},
+                status_code=400
+            )
+        
+        from src.impact_bridge.device_manager import device_manager
+        result = await device_manager.assign_device_to_target(sensor_id, target_id)
+        return JSONResponse(content=result)
+        
+    except ValueError as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=400
+        )
+    except Exception as e:
+        logger.error(f"Error assigning device: {e}")
+        return JSONResponse(
+            content={"error": f"Device assignment failed: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/devices/{sensor_id}/unassign")
+async def unassign_device(sensor_id: int):
+    """Remove device assignment from target"""
+    try:
+        from src.impact_bridge.device_manager import device_manager
+        result = await device_manager.unassign_device(sensor_id)
+        return JSONResponse(content=result)
+        
+    except ValueError as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=400
+        )
+    except Exception as e:
+        logger.error(f"Error unassigning device: {e}")
+        return JSONResponse(
+            content={"error": f"Device unassignment failed: {str(e)}"},
+            status_code=500
+        )
+
+@app.put("/api/admin/devices/{mac_address}/health")
+async def update_device_health(mac_address: str, request: Request):
+    """Update device health status (battery, RSSI)"""
+    try:
+        data = await request.json()
+        battery = data.get("battery")
+        rssi = data.get("rssi")
+        
+        from src.impact_bridge.device_manager import device_manager
+        result = await device_manager.update_device_health(mac_address, battery, rssi)
+        return JSONResponse(content=result)
+        
+    except ValueError as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=400
+        )
+    except Exception as e:
+        logger.error(f"Error updating device health: {e}")
+        return JSONResponse(
+            content={"error": f"Device health update failed: {str(e)}"},
+            status_code=500
+        )
+
+@app.delete("/api/admin/devices/{sensor_id}")
+async def remove_device(sensor_id: int):
+    """Remove a paired device"""
+    try:
+        from src.impact_bridge.device_manager import device_manager
+        result = await device_manager.remove_device(sensor_id)
+        return JSONResponse(content=result)
+        
+    except ValueError as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=400
+        )
+    except Exception as e:
+        logger.error(f"Error removing device: {e}")
+        return JSONResponse(
+            content={"error": f"Device removal failed: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/admin/devices/assignments")
+def get_device_assignments():
+    """Get current device-to-target assignments"""
+    try:
+        from src.impact_bridge.device_manager import device_manager
+        assignments = device_manager.get_device_assignments()
+        return JSONResponse(content=assignments)
+    except Exception as e:
+        logger.error(f"Error getting device assignments: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get assignments: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/devices/discovery/reset")
+def reset_device_discovery():
+    """Reset device discovery state (clear stuck scanning flag)"""
+    try:
+        from src.impact_bridge.device_manager import device_manager
+        device_manager.scanning = False
+        device_manager.discovered_devices.clear()
+        logger.info("Device discovery state reset")
+        return JSONResponse(content={
+            "status": "reset",
+            "message": "Device discovery state cleared"
+        })
+    except Exception as e:
+        logger.error(f"Error resetting device discovery: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to reset discovery: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/admin/node")
+def get_node_info():
+    """Get current node information"""
+    try:
+        import socket
+        import platform
+        from datetime import datetime
+        
+        # Get basic node info
+        node_info = {
+            'name': socket.gethostname(),
+            'platform': platform.platform(),
+            'python_version': platform.python_version(),
+            'architecture': platform.architecture()[0],
+            'timestamp': datetime.now().isoformat(),
+        }
+        
+        # Add network info
+        from src.impact_bridge.network_manager import NetworkManager
+        nm = NetworkManager()
+        network_status = nm.get_network_status()
+        node_info['network'] = network_status
+        
+        return JSONResponse(content=node_info)
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"Failed to get node info: {str(e)}"},
+            status_code=500
+        )
+
+@app.put("/api/admin/node")
+def update_node_info(request: dict):
+    """Update node configuration"""
+    try:
+        # For now, just return success
+        # In full implementation, this would update hostname, timezone, etc.
+        return JSONResponse(content={"status": "success", "message": "Node update not yet implemented"})
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"Failed to update node: {str(e)}"},
+            status_code=500
+        )
+
+# ===== STAGE MANAGEMENT ENDPOINTS =====
+
+@app.get("/api/admin/leagues")
+def get_leagues():
+    """Get all available leagues"""
+    try:
+        from .database.models import League
+        from .database.session import get_db_session
+        
+        session = get_db_session()
+        leagues = session.query(League).all()
+        session.close()
+        
+        return JSONResponse(content={
+            "leagues": [
+                {
+                    "id": league.id,
+                    "name": league.name,
+                    "abbreviation": league.abbreviation,
+                    "description": league.description
+                }
+                for league in leagues
+            ]
+        })
+    except Exception as e:
+        logger.error(f"Failed to get leagues: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get leagues: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/admin/leagues/{league_id}/stages")
+def get_league_stages(league_id: int):
+    """Get all stage configurations for a league"""
+    try:
+        from .database.models import League, StageConfig, TargetConfig, Sensor
+        from .database.database import get_database_session
+        from sqlalchemy.orm import joinedload
+        
+        with get_database_session() as session:
+            league = session.query(League).filter_by(id=league_id).first()
+            
+            if not league:
+                return JSONResponse(
+                    content={"error": "League not found"},
+                    status_code=404
+                )
+            
+            stages = session.query(StageConfig).options(
+                joinedload(StageConfig.target_configs)
+            ).filter_by(league_id=league_id).all()
+            
+            # Get all sensors assigned to target configs
+            assigned_sensors = session.query(Sensor).filter(
+                Sensor.target_config_id.isnot(None)
+            ).all()
+            sensor_by_target_config = {sensor.target_config_id: sensor for sensor in assigned_sensors}
+            
+            return JSONResponse(content={
+                "league": {
+                    "id": league.id,
+                    "name": league.name,
+                    "abbreviation": league.abbreviation
+                },
+                "stages": [
+                    {
+                        "id": stage.id,
+                        "name": stage.name,
+                        "description": stage.description,
+                        "target_count": len(stage.target_configs),
+                        "targets": [
+                            {
+                                "id": target.id,
+                                "target_number": target.target_number,
+                                "shape": target.shape,
+                                "type": target.type,
+                                "category": target.category,
+                                "distance_feet": target.distance_feet,
+                                "offset_feet": target.offset_feet,
+                                "height_feet": target.height_feet,
+                                "sensor": {
+                                    "id": sensor_by_target_config[target.id].id,
+                                    "hw_addr": sensor_by_target_config[target.id].hw_addr,
+                                    "label": sensor_by_target_config[target.id].label,
+                                    "last_seen": sensor_by_target_config[target.id].last_seen.isoformat() if sensor_by_target_config[target.id].last_seen else None,
+                                    "battery": sensor_by_target_config[target.id].battery,
+                                    "rssi": sensor_by_target_config[target.id].rssi
+                                } if target.id in sensor_by_target_config else None
+                            }
+                            for target in sorted(stage.target_configs, key=lambda t: t.target_number)
+                        ]
+                    }
+                    for stage in stages
+                ]
+            })
+    except Exception as e:
+        logger.error(f"Failed to get league stages: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get league stages: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/admin/stages/{stage_id}")
+def get_stage_details(stage_id: int):
+    """Get detailed stage configuration including target layout"""
+    try:
+        from .database.models import StageConfig, TargetConfig, Sensor
+        from .database.database import get_database_session
+        from sqlalchemy.orm import joinedload
+        
+        with get_database_session() as session:
+            stage = session.query(StageConfig).options(
+                joinedload(StageConfig.target_configs),
+                joinedload(StageConfig.league)
+            ).filter_by(id=stage_id).first()
+            
+            if not stage:
+                return JSONResponse(
+                    content={"error": "Stage not found"},
+                    status_code=404
+                )
+            
+            # Get target config IDs for this stage
+            target_config_ids = [target.id for target in stage.target_configs]
+            
+            # Get sensors assigned to any target in this stage
+            assigned_sensors = session.query(Sensor).filter(
+                Sensor.target_config_id.in_(target_config_ids)
+            ).all()
+            sensor_assignments = {sensor.target_config_id: sensor for sensor in assigned_sensors}
+            
+            return JSONResponse(content={
+            "stage": {
+                "id": stage.id,
+                "name": stage.name,
+                "description": stage.description,
+                "league": {
+                    "id": stage.league.id,
+                    "name": stage.league.name,
+                    "abbreviation": stage.league.abbreviation
+                },
+                "targets": [
+                    {
+                        "id": target.id,
+                        "target_number": target.target_number,
+                        "shape": target.shape,
+                        "type": target.type,
+                        "category": target.category,
+                        "distance_feet": target.distance_feet,
+                        "offset_feet": target.offset_feet,
+                        "height_feet": target.height_feet,
+                        "sensor": {
+                            "id": sensor_assignments[target.id].id,
+                            "hw_addr": sensor_assignments[target.id].hw_addr,
+                            "label": sensor_assignments[target.id].label,
+                            "last_seen": sensor_assignments[target.id].last_seen.isoformat() if sensor_assignments[target.id].last_seen else None,
+                            "battery": sensor_assignments[target.id].battery,
+                            "rssi": sensor_assignments[target.id].rssi
+                        } if target.id in sensor_assignments else None
+                    }
+                    for target in sorted(stage.target_configs, key=lambda t: t.target_number)
+                ]
+            }
+        })
+    except Exception as e:
+        logger.error(f"Failed to get stage details: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get stage details: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/stages/{stage_id}/assign_sensor")
+def assign_sensor_to_target(stage_id: int, request: dict):
+    """Assign a sensor to a specific target in a stage"""
+    try:
+        from .database.models import StageConfig, TargetConfig, Sensor
+        from .database.database import get_database_session
+        
+        sensor_id = request.get("sensor_id")
+        target_number = request.get("target_number")
+        
+        if not sensor_id or not target_number:
+            return JSONResponse(
+                content={"error": "sensor_id and target_number are required"},
+                status_code=400
+            )
+        
+        with get_database_session() as session:
+            # Verify stage exists
+            stage = session.query(StageConfig).filter_by(id=stage_id).first()
+            if not stage:
+                return JSONResponse(
+                    content={"error": "Stage not found"},
+                    status_code=404
+                )
+            
+            # Find the target config
+            target_config = session.query(TargetConfig).filter_by(
+                stage_config_id=stage_id,
+                target_number=target_number
+            ).first()
+            
+            if not target_config:
+                return JSONResponse(
+                    content={"error": f"Target {target_number} not found in stage"},
+                    status_code=404
+                )
+            
+            # Find the sensor
+            sensor = session.query(Sensor).filter_by(id=sensor_id).first()
+            if not sensor:
+                return JSONResponse(
+                    content={"error": "Sensor not found"},
+                    status_code=404
+                )
+            
+            # Clear any existing assignment for this sensor
+            sensor.target_config_id = None
+            
+            # Assign sensor to target
+            sensor.target_config_id = target_config.id
+            
+            # Store data we need for response before session closes
+            sensor_label = sensor.label
+            stage_name = stage.name
+            target_type = target_config.type
+            target_category = target_config.category
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Sensor {sensor_label} assigned to {stage_name} Target {target_number}",
+            "assignment": {
+                "sensor_id": sensor_id,
+                "sensor_label": sensor_label,
+                "stage_name": stage_name,
+                "target_number": target_number,
+                "target_type": target_type,
+                "target_category": target_category
+            }
+        })
+    except Exception as e:
+        logger.error(f"Failed to assign sensor: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to assign sensor: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/stages/{stage_id}/unassign_sensor")
+def unassign_sensor_from_target(stage_id: int, request: dict):
+    """Remove sensor assignment from a target"""
+    try:
+        from .database.models import TargetConfig, Sensor
+        from .database.database import get_database_session
+        
+        target_number = request.get("target_number")
+        
+        if not target_number:
+            return JSONResponse(
+                content={"error": "target_number is required"},
+                status_code=400
+            )
+        
+        with get_database_session() as session:
+            # Find the target config
+            target_config = session.query(TargetConfig).filter_by(
+                stage_config_id=stage_id,
+                target_number=target_number
+            ).first()
+            
+            if not target_config:
+                return JSONResponse(
+                    content={"error": f"Target {target_number} not found in stage"},
+                    status_code=404
+                )
+            
+            # Find assigned sensor
+            sensor = session.query(Sensor).filter_by(target_config_id=target_config.id).first()
+            
+            if sensor:
+                sensor.target_config_id = None
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Sensor unassigned from Target {target_number}",
+            "target_number": target_number
+        })
+    except Exception as e:
+        logger.error(f"Failed to unassign sensor: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to unassign sensor: {str(e)}"},
+            status_code=500
+        )
+
+# ============================================================================
+# Bridge Configuration Endpoints
+# ============================================================================
+
+@app.get("/api/admin/bridge")
+def get_bridge_config():
+    """Get current Bridge configuration"""
+    try:
+        from .database.models import Bridge
+        from .database.database import get_database_session
+        
+        with get_database_session() as session:
+            # Get the current Bridge (assume single Bridge per instance for now)
+            bridge = session.query(Bridge).first()
+            
+            if not bridge:
+                # Create default Bridge if none exists
+                bridge = Bridge(
+                    name="Default Bridge",
+                    bridge_id="bridge-001",
+                    match_id=None,
+                    match_name=None
+                )
+                session.add(bridge)
+                session.commit()
+                session.refresh(bridge)
+            
+            return JSONResponse(content={
+                "bridge": {
+                    "id": bridge.id,
+                    "name": bridge.name,
+                    "bridge_id": bridge.bridge_id,
+                    "current_stage_id": bridge.current_stage_id,
+                    "current_stage_name": bridge.current_stage.name if bridge.current_stage else None,
+                    "match_id": bridge.match_id,
+                    "match_name": bridge.match_name,
+                    "created_at": bridge.created_at.isoformat(),
+                    "updated_at": bridge.updated_at.isoformat()
+                }
+            })
+    except Exception as e:
+        logger.error(f"Failed to get Bridge config: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get Bridge config: {str(e)}"},
+            status_code=500
+        )
+
+@app.put("/api/admin/bridge")
+def update_bridge_config(request: dict):
+    """Update Bridge configuration"""
+    try:
+        from .database.models import Bridge
+        from .database.database import get_database_session
+        
+        name = request.get("name")
+        bridge_id = request.get("bridge_id")
+        match_id = request.get("match_id")
+        match_name = request.get("match_name")
+        
+        if not name or not bridge_id:
+            return JSONResponse(
+                content={"error": "name and bridge_id are required"},
+                status_code=400
+            )
+        
+        with get_database_session() as session:
+            # Get the current Bridge
+            bridge = session.query(Bridge).first()
+            
+            if not bridge:
+                # Create new Bridge
+                bridge = Bridge(
+                    name=name,
+                    bridge_id=bridge_id,
+                    match_id=match_id,
+                    match_name=match_name
+                )
+                session.add(bridge)
+            else:
+                # Update existing Bridge
+                bridge.name = name
+                bridge.bridge_id = bridge_id
+                bridge.match_id = match_id
+                bridge.match_name = match_name
+            
+            session.commit()
+            session.refresh(bridge)
+            
+            return JSONResponse(content={
+                "status": "success",
+                "message": "Bridge configuration updated",
+                "bridge": {
+                    "id": bridge.id,
+                    "name": bridge.name,
+                    "bridge_id": bridge.bridge_id,
+                    "current_stage_id": bridge.current_stage_id,
+                    "match_id": bridge.match_id,
+                    "match_name": bridge.match_name
+                }
+            })
+    except Exception as e:
+        logger.error(f"Failed to update Bridge config: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to update Bridge config: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/bridge/assign_stage")
+def assign_bridge_to_stage(request: dict):
+    """Assign this Bridge to a specific stage"""
+    try:
+        from .database.models import Bridge, StageConfig, Sensor
+        from .database.database import get_database_session
+        
+        stage_id = request.get("stage_id")
+        
+        if not stage_id:
+            return JSONResponse(
+                content={"error": "stage_id is required"},
+                status_code=400
+            )
+        
+        with get_database_session() as session:
+            # Get the current Bridge
+            bridge = session.query(Bridge).first()
+            if not bridge:
+                return JSONResponse(
+                    content={"error": "Bridge not configured"},
+                    status_code=404
+                )
+            
+            # Verify stage exists
+            stage = session.query(StageConfig).filter_by(id=stage_id).first()
+            if not stage:
+                return JSONResponse(
+                    content={"error": "Stage not found"},
+                    status_code=404
+                )
+            
+            # Update Bridge assignment
+            bridge.current_stage_id = stage_id
+            
+            # Update all sensors assigned to targets in this stage to belong to this Bridge
+            target_ids = [target.id for target in stage.target_configs]
+            if target_ids:
+                session.query(Sensor).filter(
+                    Sensor.target_config_id.in_(target_ids)
+                ).update({"bridge_id": bridge.id}, synchronize_session=False)
+            
+            session.commit()
+            
+            return JSONResponse(content={
+                "status": "success",
+                "message": f"Bridge '{bridge.name}' assigned to stage '{stage.name}'",
+                "assignment": {
+                    "bridge_id": bridge.id,
+                    "bridge_name": bridge.name,
+                    "stage_id": stage.id,
+                    "stage_name": stage.name,
+                    "sensors_updated": len(target_ids) if target_ids else 0
+                }
+            })
+    except Exception as e:
+        logger.error(f"Failed to assign Bridge to stage: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to assign Bridge to stage: {str(e)}"},
+            status_code=500
+        )
+
+@app.websocket("/ws/logs")
+async def websocket_logs_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        # Send initial log batch
+        logs = fetch_logs(50)
+        await websocket.send_json({"type": "log_batch", "logs": logs})
+        
+        while True:
+            # Wait for client messages
+            data = await websocket.receive_json()
+            if data.get("type") == "request_logs":
+                limit = data.get("limit", 50)
+                logs = fetch_logs(limit)
+                await websocket.send_json({"type": "log_batch", "logs": logs})
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
+
+@app.websocket("/ws/live")
+async def websocket_live_endpoint(websocket: WebSocket):
+    """Enhanced WebSocket endpoint for real-time event streaming"""
+    from src.impact_bridge.event_streamer import event_streamer
+    
+    try:
+        await event_streamer.connect(websocket)
+        
+        # Auto-subscribe to common channels
+        await event_streamer.subscribe_client(websocket, [
+            'status', 'sensor_events', 'timer_events', 'health_status'
+        ])
+        
+        # Send initial status
+        await event_streamer.send_status_update(websocket)
+        
+        while True:
+            # Wait for client messages
+            try:
+                message = await websocket.receive_text()
+                data = json.loads(message)
+                await event_streamer.handle_client_message(websocket, data)
+            except json.JSONDecodeError:
+                await event_streamer.send_to_client(websocket, {
+                    'type': 'error',
+                    'message': 'Invalid JSON message'
+                })
+                
+    except WebSocketDisconnect:
+        event_streamer.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket live endpoint error: {e}")
+        event_streamer.disconnect(websocket)
+
+def fetch_logs(limit: int = 100) -> List[Dict[str, Any]]:
+    all_logs = []
+    for log_dir in LOG_DIRS:
+        if not os.path.exists(log_dir):
+            continue
+        log_patterns = [
+            os.path.join(log_dir, '*.log'),
+            os.path.join(log_dir, '*.ndjson'),
+            os.path.join(log_dir, '*.csv')
+        ]
+        for pattern in log_patterns:
+            log_files = glob.glob(pattern)
+            log_files.sort(key=os.path.getmtime, reverse=True)
+            for log_file in log_files[:5]:
+                try:
+                    entries = parse_log_file(log_file, limit)
+                    all_logs.extend(entries)
+                    if len(all_logs) >= limit:
+                        break
+                except Exception as e:
+                    print(f"⚠️ Error parsing {log_file}: {e}")
+                    continue
+            if len(all_logs) >= limit:
+                break
+        if len(all_logs) >= limit:
+            break
+    all_logs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+    return all_logs[:limit]
+
+def parse_log_file(file_path: str, max_entries: int = 100) -> List[Dict[str, Any]]:
+    entries = []
+    file_name = os.path.basename(file_path)
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        for line in reversed(lines[-max_entries:]):
+            line = line.strip()
+            if not line:
+                continue
+            entry = parse_log_entry(line, file_name)
+            if entry:
+                entries.append(entry)
+    except Exception as e:
+        print(f"⚠️ Error reading {file_path}: {e}")
+    return entries
+
+def parse_log_entry(line: str, source_file: str) -> Dict[str, Any]:
+    try:
+        if line.startswith('{'):
+            try:
+                data = json.loads(line)
+                return {
+                    'timestamp': data.get('timestamp', datetime.now().isoformat()),
+                    'level': data.get('level', 'INFO'),
+                    'source': data.get('source', source_file),
+                    'message': data.get('message', line),
+                    'raw': line
+                }
+            except json.JSONDecodeError:
+                pass
+        if line.startswith('[') and ']' in line:
+            try:
+                end_bracket = line.find(']')
+                timestamp_str = line[1:end_bracket]
+                remainder = line[end_bracket + 1:].strip()
+                if ':' in remainder:
+                    level_part, message = remainder.split(':', 1)
+                    level = level_part.strip()
+                    message = message.strip()
+                else:
+                    level = 'INFO'
+                    message = remainder
+                source = source_file
+                if 'FixedBridge' in message:
+                    source = 'FixedBridge'
+                elif 'bleak' in message:
+                    source = 'bleak.backends.bluezdbus.manager'
+                elif 'BT50' in message:
+                    source = 'BT50Sensor'
+                return {
+                    'timestamp': timestamp_str,
+                    'level': level,
+                    'source': source,
+                    'message': message,
+                    'raw': line
+                }
+            except (ValueError, IndexError):
+                pass
+        return {
+            'timestamp': datetime.now().isoformat(),
+            'level': 'INFO',
+            'source': source_file,
+            'message': line,
+            'raw': line
+        }
+    except Exception as e:
+        print(f"⚠️ Error parsing log line: {e}")
+        return None
+
+@app.get("/api/health/detailed")
+def get_detailed_health():
+    """Get comprehensive health status including system monitoring"""
+    try:
+        from src.impact_bridge.system_monitor import SystemMonitor
+        monitor = SystemMonitor()
+        
+        health_data = {
+            'timestamp': datetime.now().isoformat(),
+            'status': 'healthy',
+            'version': '2.0.0',
+            'system': monitor.get_system_stats(),
+            'services': monitor.get_service_health(),
+            'ble': monitor.get_ble_quality(),
+            'network_interfaces': monitor.get_network_interfaces()
+        }
+        
+        # Determine overall health status
+        cpu_usage = health_data['system']['cpu']['usage_percent']
+        memory_usage = health_data['system']['memory']['percent']
+        disk_usage = health_data['system']['disk']['percent']
+        
+        if cpu_usage > 90 or memory_usage > 95 or disk_usage > 95:
+            health_data['status'] = 'critical'
+        elif cpu_usage > 70 or memory_usage > 85 or disk_usage > 85:
+            health_data['status'] = 'warning'
+        
+        return JSONResponse(content=health_data)
+    except Exception as e:
+        return JSONResponse(
+            content={
+                'timestamp': datetime.now().isoformat(),
+                'status': 'error',
+                'error': f'Health check failed: {str(e)}'
+            },
+            status_code=500
+        )
+
+@app.get("/api/health/detailed")
+def get_detailed_health():
+    """Get comprehensive health status including system monitoring"""
+    try:
+        from src.impact_bridge.system_monitor import SystemMonitor
+        monitor = SystemMonitor()
+        
+        health_data = {
+            'timestamp': datetime.now().isoformat(),
+            'status': 'healthy',
+            'version': '2.0.0',
+            'system': monitor.get_system_stats(),
+            'services': monitor.get_service_health(),
+            'ble': monitor.get_ble_quality(),
+            'network_interfaces': monitor.get_network_interfaces()
+        }
+        
+        # Determine overall health status
+        cpu_usage = health_data['system']['cpu']['usage_percent']
+        memory_usage = health_data['system']['memory']['percent']
+        disk_usage = health_data['system']['disk']['percent']
+        
+        if cpu_usage > 90 or memory_usage > 95 or disk_usage > 95:
+            health_data['status'] = 'critical'
+        elif cpu_usage > 70 or memory_usage > 85 or disk_usage > 85:
+            health_data['status'] = 'warning'
+        
+        return JSONResponse(content=health_data)
+    except Exception as e:
+        return JSONResponse(
+            content={
+                'timestamp': datetime.now().isoformat(),
+                'status': 'error',
+                'error': f'Health check failed: {str(e)}'
+            },
+            status_code=500
+        )
+
+# Setup authentication routes
+try:
+    from src.impact_bridge.auth.api import create_auth_routes
+    # Note: FastAPI auth integration will need adaptation from Flask routes
+    print("✅ Authentication routes available (adaptation needed)")
+except ImportError as e:
+    print(f"⚠️  Authentication not available: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    try:
+        # Initialize database
+        try:
+            from pathlib import Path
+            from src.impact_bridge.config import DatabaseConfig
+            from src.impact_bridge.database import init_database
+            
+            # Use absolute path to database in project root
+            project_root = Path(__file__).parent.parent.parent
+            
+            config = DatabaseConfig()
+            config.dir = str(project_root)
+            config.file = "leadville.db"
+            
+            init_database(config)
+            logger.info(f"Database initialized at {config.path}")
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
+        
+        from src.impact_bridge.event_streamer import event_streamer
+        await event_streamer.start_periodic_tasks()
+        
+        # Try to setup MQTT integration
+        try:
+            from src.impact_bridge.mqtt_client import LeadVilleMQTT
+            mqtt_client = LeadVilleMQTT()
+            if await mqtt_client.connect():
+                event_streamer.setup_mqtt_integration(mqtt_client)
+                logger.info("MQTT integration enabled for event streaming")
+            else:
+                logger.warning("MQTT connection failed, event streaming will work without MQTT")
+        except Exception as e:
+            logger.warning(f"MQTT setup failed: {e}. Event streaming will work without MQTT")
+            
+        logger.info("FastAPI startup complete with database and event streaming")
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+
+if __name__ == "__main__":
+    import uvicorn
+    print("=" * 60)
+    print("🚀 LeadVille FastAPI Server Starting")
+    print("=" * 60)
+    print(f"📊 Project: LeadVille Impact Bridge (FastAPI)")
+    print(f"🌐 Host: 0.0.0.0:8001")
+    print(f"📁 Log directories:")
+    for log_dir in LOG_DIRS:
+        exists = "✅" if os.path.exists(log_dir) else "❌"
+        print(f"   {exists} {log_dir}")
+    print()
+    print("🌐 API Endpoints:")
+    print(f"   📊 Health: http://0.0.0.0:8001/api/health")
+    print(f"   📝 Logs: http://0.0.0.0:8001/api/logs")
+    print(f"   🔌 WebSocket Logs: ws://0.0.0.0:8001/ws/logs")
+    print(f"   ⚡ WebSocket Live: ws://0.0.0.0:8001/ws/live")
+    print(f"   📚 Docs: http://0.0.0.0:8001/docs")
+    print("=" * 60)
+    
+    uvicorn.run(app, host="0.0.0.0", port=8001)
