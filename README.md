@@ -262,3 +262,36 @@ For technical support or questions:
 ---
 
 **LeadVille Impact Bridge v2.0** - Professional shooting sports impact detection system
+
+## BT50 capture (tools/bt50_capture_db.py)
+
+The project includes a lightweight multi-sensor capture tool at `tools/bt50_capture_db.py` which discovers/connects to BT50/WTVB devices, parses raw frames using the project's parser, and persists records to a local SQLite database at `logs/bt50_samples.db`.
+
+Basic usage:
+
+```
+python3 -u tools/bt50_capture_db.py --mac AA:BB:CC:DD:EE:FF --duration 30
+```
+
+Key CLI flags:
+
+- `--mac` (repeatable): sensor MAC address to capture from
+- `--char`: notify characteristic UUID (default the BT50 notify UUID)
+- `--duration`: seconds to capture
+- `--status-interval`: seconds between writing status history rows for a sensor
+- `--reconnect-max-retries`, `--reconnect-base-delay`, `--reconnect-max-delay`: control per-sensor reconnect/backoff
+- `--detect-enabled`: enable built-in impact detection (heuristic)
+- `--detect-window-ms`, `--detect-pre-ms`, `--detect-threshold-start`, `--detect-threshold-spike`: control detection window and thresholds
+
+Database schema (summary)
+
+- `bt50_samples`: Raw motion samples with columns: `id, ts_ns, sensor_mac, frame_hex, parser, vx, vy, vz, angle_x, angle_y, angle_z, temp_raw, temperature_c, disp_x, disp_y, disp_z, freq_x, freq_y, freq_z`.
+- `device_status`: Latest status per sensor (one row per MAC). New column: `last_history_ns` (persisted timestamp when a history snapshot was last written). Columns: `sensor_mac` (PK), `last_seen_ns`, `temperature_c`, `temp_raw`, `battery_pct`, `battery_mv`, `last_history_ns`.
+- `device_status_history`: Occasional status snapshots inserted at most once per `--status-interval` (or when values change significantly). Columns: `id, sensor_mac, ts_ns, temperature_c, temp_raw, battery_pct, battery_mv`.
+- `impacts`: Compact impact summary events produced by the optional detector. Columns: `id, sensor_mac, impact_ts_ns, detection_ts_ns, peak_mag, pre_mag, post_mag, duration_ms`.
+
+Notes:
+
+- The capture tool batches DB writes and uses `PRAGMA journal_mode=WAL` to reduce IO contention.
+- `last_history_ns` allows the capture process to avoid duplicating history rows after restart by seeding in-memory timers from the DB.
+- Impact detection included is a simple heuristic for prototyping; you may want to scale raw accelerometer values to 'g' or tune thresholds per sensor.
