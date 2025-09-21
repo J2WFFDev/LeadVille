@@ -88,4 +88,9 @@ site/
 *.rar
 
 # Jupyter Notebooks (if any added later)
-.ipynb_checkpoints/
+.ipynb_checkpoints/# Ignore local database and sqlite artifacts
+*.db
+*.db-*
+*.db-shm
+*.db-wal
+*.log
