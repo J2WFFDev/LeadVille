@@ -1,0 +1,110 @@
+            # Enhanced per-sensor calibration analysis
+            print()  # New line after progress
+            print(f"\n🎯 Calibration collection completed for all sensors!")
+            print(f"\n📊 Detailed Per-Sensor Calibration Analysis:")
+            print(f"📈 Total samples collected: {len(self.calibration_samples)}")
+            
+            # Analyze calibration data by clustering samples (sensors typically have different baseline characteristics)
+            vx_values = [s['vx_raw'] for s in self.calibration_samples]
+            vy_values = [s['vy_raw'] for s in self.calibration_samples]
+            vz_values = [s['vz_raw'] for s in self.calibration_samples]
+            
+            # Group samples by time windows to identify sensor contributions
+            # Since sensors send data at slightly different intervals, we can cluster by timestamp patterns
+            import statistics
+            from collections import defaultdict
+            
+            # Sort samples by timestamp
+            sorted_samples = sorted(self.calibration_samples, key=lambda x: x['timestamp'])
+            
+            # Group samples by timing patterns (sensors have different transmission patterns)
+            sensor_groups = defaultdict(list)
+            time_deltas = []
+            
+            for i in range(1, len(sorted_samples)):
+                delta = sorted_samples[i]['timestamp'] - sorted_samples[i-1]['timestamp']
+                time_deltas.append(delta)
+            
+            # Simple clustering: group samples by alternating pattern or time gaps
+            current_group = 0
+            sensor_groups[current_group].append(sorted_samples[0])
+            
+            for i in range(1, len(sorted_samples)):
+                delta = sorted_samples[i]['timestamp'] - sorted_samples[i-1]['timestamp']
+                
+                # If there's a significant time gap or pattern change, switch groups
+                if delta > 0.1:  # 100ms gap suggests different sensor
+                    current_group = 1 - current_group  # Toggle between 0 and 1
+                
+                sensor_groups[current_group].append(sorted_samples[i])
+            
+            # Analyze each sensor group
+            sensor_stats = {}
+            for group_id, samples in sensor_groups.items():
+                if len(samples) < 10:  # Skip groups with too few samples
+                    continue
+                    
+                vx_group = [s['vx_raw'] for s in samples]
+                vy_group = [s['vy_raw'] for s in samples]
+                vz_group = [s['vz_raw'] for s in samples]
+                
+                # Calculate statistics for this sensor group
+                baseline_x = int(sum(vx_group) / len(vx_group))
+                baseline_y = int(sum(vy_group) / len(vy_group))
+                baseline_z = int(sum(vz_group) / len(vz_group))
+                
+                noise_x = statistics.stdev(vx_group) if len(set(vx_group)) > 1 else 0
+                noise_y = statistics.stdev(vy_group) if len(set(vy_group)) > 1 else 0
+                noise_z = statistics.stdev(vz_group) if len(set(vz_group)) > 1 else 0
+                
+                # Store sensor statistics
+                sensor_stats[group_id] = {
+                    'samples': len(samples),
+                    'baseline_x': baseline_x,
+                    'baseline_y': baseline_y,
+                    'baseline_z': baseline_z,
+                    'noise_x': noise_x,
+                    'noise_y': noise_y,
+                    'noise_z': noise_z,
+                    'vx_range': (min(vx_group), max(vx_group)),
+                    'vy_range': (vy_group and min(vy_group), max(vy_group)),
+                    'vz_range': (min(vz_group), max(vz_group))
+                }
+            
+            # Display per-sensor results
+            sensor_names = ['BAE5', '5550']  # Known sensor identifiers
+            for i, (group_id, stats) in enumerate(sensor_stats.items()):
+                sensor_name = sensor_names[i] if i < len(sensor_names) else f"Sensor_{group_id+1}"
+                
+                print(f"\n📊 {sensor_name} Sensor Analysis:")
+                print(f"   📈 Samples collected: {stats['samples']}")
+                print(f"   📍 Baseline: X={stats['baseline_x']:+05d}, Y={stats['baseline_y']:+05d}, Z={stats['baseline_z']:+05d}")
+                print(f"   📏 Noise (±1σ): X=±{stats['noise_x']:.1f}, Y=±{stats['noise_y']:.1f}, Z=±{stats['noise_z']:.1f}")
+                print(f"   📊 Raw ranges: X={stats['vx_range']}, Y={stats['vy_range']}, Z={stats['vz_range']}")
+                
+                # Calculate adjustment needed from zero
+                adj_x = abs(stats['baseline_x'])
+                adj_y = abs(stats['baseline_y']) 
+                adj_z = abs(stats['baseline_z'])
+                print(f"   🔧 Zero adjustment: X={adj_x}, Y={adj_y}, Z={adj_z} counts")
+                
+                # Confidence intervals (±2σ = ~95% confidence)
+                conf_x = 2 * stats['noise_x']
+                conf_y = 2 * stats['noise_y']
+                conf_z = 2 * stats['noise_z']
+                print(f"   📈 95% confidence (±2σ): X=±{conf_x:.1f}, Y=±{conf_y:.1f}, Z=±{conf_z:.1f}")
+
+            # Calculate combined baseline for system compatibility
+            self.baseline_x = int(sum(vx_values) / len(vx_values))
+            self.baseline_y = int(sum(vy_values) / len(vy_values))
+            self.baseline_z = int(sum(vz_values) / len(vz_values))
+
+            # Combined noise characteristics
+            noise_x = statistics.stdev(vx_values) if len(set(vx_values)) > 1 else 0
+            noise_y = statistics.stdev(vy_values) if len(set(vy_values)) > 1 else 0
+            noise_z = statistics.stdev(vz_values) if len(set(vz_values)) > 1 else 0
+            
+            print(f"\n📊 Combined System Baseline:")
+            print(f"   📍 System baseline: X={self.baseline_x:+05d}, Y={self.baseline_y:+05d}, Z={self.baseline_z:+05d}")
+            print(f"   📏 Combined noise: X=±{noise_x:.1f}, Y=±{noise_y:.1f}, Z=±{noise_z:.1f}")
+            print(f"   🎯 Impact threshold: {IMPACT_THRESHOLD} counts from baseline")

@@ -84,7 +84,7 @@ export const SensorAssignment: React.FC<SensorAssignmentProps> = ({
   return (
     <div className="space-y-4">
       {/* Connected Devices Summary */}
-      <div className="bg-gray-50 rounded-lg p-4">
+      <div className="bg-gray-100 rounded-lg p-4">
         <h3 className="text-sm font-medium text-gray-700 mb-2">
           Connected Sensors ({connectedDevices.length})
         </h3>

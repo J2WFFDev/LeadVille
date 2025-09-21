@@ -1,0 +1,7 @@
+        # Use the sensor_mac parameter passed from the sensor-specific handler
+        if sensor_mac is None:
+            # Fallback: use first available sensor if no parameter provided
+            if self.sensor_mappings:
+                sensor_mac = list(self.sensor_mappings.keys())[0]
+            else:
+                sensor_mac = "UNKNOWN:SENSOR"

@@ -27,7 +27,7 @@ export const TimerPanel: React.FC = () => {
       case 'stopped':
         return 'text-red-600 bg-red-50 border-red-200';
       default:
-        return 'text-gray-600 bg-gray-50 border-gray-200';
+        return 'text-gray-600 bg-gray-100 border-gray-200';
     }
   };
 
@@ -63,7 +63,7 @@ export const TimerPanel: React.FC = () => {
         </div>
 
         {/* Shot Counter */}
-        <div className="bg-gray-50 rounded-lg p-6 text-center">
+        <div className="bg-gray-100 rounded-lg p-6 text-center">
           <div className="text-sm font-medium text-gray-600 mb-2">Current Shot</div>
           <div className="text-4xl font-bold text-leadville-primary">
             {currentShot || '--'}
@@ -75,7 +75,7 @@ export const TimerPanel: React.FC = () => {
           <h4 className="text-sm font-semibold text-gray-700 mb-3">Recent Events</h4>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {timerEvents.slice(-5).reverse().map((event, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-100 rounded-lg text-sm">
                 <div className="font-medium text-gray-700">
                   {event.event_type.replace('_', ' ').toUpperCase()}
                 </div>
