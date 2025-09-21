@@ -66,9 +66,11 @@ statistical_timing_data.json
 # Development artifacts
 *.tmp
 *.backup
-test_*.py
-debug_*.py
-analyze_*.py
+# Keep test files under the tests/ directory tracked; avoid ignoring all files starting with 'test_'
+!tests/
+!tests/**
+# local/debug helper scripts should be named debug/* or tools/debug_*.py instead of global ignores
+# (remove broad debug/test ignores to allow test sources to be committed)
 
 # System files
 .pytest_cache/
