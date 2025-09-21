@@ -62,7 +62,21 @@ logger = logging.getLogger(__name__)
 
 # Import the impact bridge components
 try:
-    from impact_bridge.wtvb_parse import parse_5561
+    # Prefer the verbose BLE parser for diagnostics; keep the original simple
+    # parse_5561 available to preserve existing behavior used throughout the
+    # bridge. The verbose parser can persist parsed frames for analysis.
+    try:
+        from impact_bridge.ble.wtvb_parse import scan_and_parse, parse_flag61_frame, parse_wtvb32_frame  # type: ignore
+    except Exception:
+        # If the ble package import style isn't available, try the flat import
+        from impact_bridge.wtvb_parse import scan_and_parse, parse_flag61_frame, parse_wtvb32_frame  # type: ignore
+
+    # Import the simple parser under the expected name so existing code keeps working
+    try:
+        from impact_bridge.ble.wtvb_parse_simple import parse_5561
+    except Exception:
+        # Fallback if package paths differ
+        from impact_bridge.wtvb_parse_simple import parse_5561
     from impact_bridge.shot_detector import ShotDetector
     from impact_bridge.timing_calibration import RealTimeTimingCalibrator
     from impact_bridge.enhanced_impact_detection import EnhancedImpactDetector
@@ -77,6 +91,10 @@ except Exception as e:
 # Device Configuration - Now dynamically loaded from Bridge assignments
 # AMG_TIMER_MAC = "60:09:C3:1F:DC:1A"  # Legacy - now loaded from Bridge assignments
 # BT50_SENSOR_MAC = "F8:FE:92:31:12:E3"  # Legacy - now loaded from Bridge assignments
+# Placeholder legacy names for backward-compatible reset logic. These will
+# usually be None/empty because the bridge reads assignments from the DB.
+BT50_SENSOR_MAC = ""
+AMG_TIMER_MAC = ""
 
 # BLE UUIDs
 AMG_TIMER_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
@@ -452,7 +470,28 @@ class LeadVilleBridge:
             return
             
         try:
-            # Parse sensor data
+            # Persist verbose parsed frames for offline analysis if sample logging
+            # is enabled (this writes to logs/bt50_samples.db)
+            try:
+                write_db = False
+                if hasattr(self, 'dev_config') and self.dev_config:
+                    # dev_config may expose a sample logging toggle
+                    if hasattr(self.dev_config, 'is_sample_logging_enabled'):
+                        write_db = self.dev_config.is_sample_logging_enabled()
+                    elif hasattr(self.dev_config, 'should_log_all_samples'):
+                        write_db = self.dev_config.should_log_all_samples()
+
+                # scan_and_parse is non-blocking and quick; it will write rows when
+                # enabled. Wrap in its own try to avoid breaking detection on DB errors.
+                try:
+                    scan_and_parse(data, write_db=write_db)
+                except Exception as e:
+                    self.logger.debug(f"Verbose parser DB write failed: {e}")
+            except Exception:
+                # If verbose parser not available, ignore and continue
+                pass
+
+            # Parse sensor data using the simple parser (returns scaled vx/vy/vz)
             result = parse_5561(data)
             if not result or not result['samples']:
                 return
