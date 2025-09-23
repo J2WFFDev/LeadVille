@@ -77,6 +77,118 @@ def get_logs(limit: int = 100):
     logs = fetch_logs(limit)
     return JSONResponse(content=logs)
 
+@app.get("/api/shot-log")
+def get_shot_log(limit: int = 100):
+    """Get combined timer events and sensor impacts from shot_log database view"""
+    try:
+        import sqlite3
+        from pathlib import Path
+        
+        # Path to the database (on Raspberry Pi)
+        db_path = Path("/home/jrwest/projects/LeadVille/logs/bt50_samples.db")
+        
+        # Check if database exists
+        if not db_path.exists():
+            return JSONResponse(
+                content={"error": "Database not found", "logs": []},
+                status_code=404
+            )
+        
+        # Query shot_log view
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                log_id,
+                record_type,
+                event_time,
+                device_id,
+                event_type,
+                current_shot,
+                split_seconds,
+                string_total_time,
+                sensor_mac,
+                impact_magnitude
+            FROM shot_log 
+            ORDER BY ts_ns DESC 
+            LIMIT ?
+        """, (limit,))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # Convert to list of dictionaries
+        logs = []
+        for row in rows:
+            logs.append({
+                "log_id": row[0],
+                "record_type": row[1],
+                "timestamp": row[2],  # event_time is already formatted
+                "level": get_log_level_for_event(row[4]),  # event_type
+                "source": get_source_for_record(row[1], row[3], row[8]),  # record_type, device_id, sensor_mac
+                "message": format_shot_log_message(row),
+                "event_type": row[4],
+                "shot_number": row[5],
+                "split_time": row[6],
+                "total_time": row[7],
+                "sensor_mac": row[8],
+                "impact_magnitude": row[9]
+            })
+        
+        return JSONResponse(content={"logs": logs, "count": len(logs)})
+        
+    except Exception as e:
+        logger.error(f"Error fetching shot_log data: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to fetch shot log: {str(e)}", "logs": []},
+            status_code=500
+        )
+
+def get_log_level_for_event(event_type: str) -> str:
+    """Map event types to log levels for consistent display"""
+    if event_type == "START":
+        return "INFO"
+    elif event_type == "SHOT":
+        return "SUCCESS"
+    elif event_type == "STOP":
+        return "INFO"
+    elif event_type == "IMPACT":
+        return "WARNING"
+    else:
+        return "INFO"
+
+def get_source_for_record(record_type: str, device_id: str, sensor_mac: str) -> str:
+    """Generate source name for different record types"""
+    if record_type == "shot":
+        return "📊 shot_log"
+    elif record_type == "timer_control":
+        return "📊 shot_log"
+    elif record_type == "impact":
+        return "� shot_log"
+    else:
+        return "📊 shot_log"
+
+def format_shot_log_message(row) -> str:
+    """Format shot log row into readable message"""
+    log_id, record_type, event_time, device_id, event_type, current_shot, split_seconds, string_total_time, sensor_mac, impact_magnitude = row
+    
+    if record_type == "shot":
+        split_time = f"{split_seconds:.2f}" if split_seconds is not None else "0.00"
+        total_time = f"{string_total_time:.2f}" if string_total_time is not None else "0.00"
+        return f"Shot #{current_shot} - Split: {split_time}s, Total: {total_time}s"
+    elif record_type == "timer_control":
+        if event_type == "START":
+            return "🔫 Timer started"
+        elif event_type == "STOP":
+            total_time = f"{string_total_time:.2f}" if string_total_time is not None else "0.00"
+            return f"🏁 Timer stopped - Final time: {total_time}s"
+    elif record_type == "impact":
+        magnitude = f"{impact_magnitude:.1f}" if impact_magnitude is not None else "0.0"
+        return f"💥 Impact detected - Magnitude: {magnitude}"
+    
+    return f"{event_type}: {record_type}"
+
 @app.get("/api/admin/network")
 def get_network_status():
     """Get current network status and configuration"""

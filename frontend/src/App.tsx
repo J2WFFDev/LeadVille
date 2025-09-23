@@ -13,6 +13,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ConsolePage } from './pages/ConsolePage';
 import { RangeOfficerPage } from './pages/RangeOfficerPage';
 import { StageSetupPage } from './pages/StageSetupPage';
+import { TimerDashboardPage } from './pages/TimerDashboardPage';
+import { LiveLogPage } from './pages/LiveLogPage';
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/timer" element={<TimerPage />} />
+          <Route path="/timer-dashboard" element={<TimerDashboardPage />} />
+          <Route path="/live-log" element={<LiveLogPage />} />
           <Route path="/sensor" element={<SensorPage />} />
           <Route path="/match-setup" element={<MatchSetupPage />} />
           <Route path="/stage-setup" element={<StageSetupPage />} />

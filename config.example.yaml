@@ -1,0 +1,157 @@
+# LeadVille Impact Bridge Configuration
+# Example configuration file showing timer adapter options
+
+# Timer configuration
+timer:
+  # Timer type: "amg" or "specialpie"
+  type: "amg"
+  
+  # Connection settings (choose one)
+  connection:
+    # Bluetooth LE connection
+    ble:
+      mac_address: "60:09:C3:1F:DC:1A"  # AMG Commander MAC
+      # mac_address: "AA:BB:CC:DD:EE:FF"  # SpecialPie MAC
+      
+    # Serial connection (SpecialPie only)
+    serial:
+      port: "/dev/ttyACM0"  # Linux
+      # port: "COM3"        # Windows
+      baud: 115200
+      
+    # UDP simulator (SpecialPie only)
+    simulator:
+      enabled: false
+      port: 12345
+
+# AMG Commander specific settings
+amg:
+  # BLE service configuration
+  service_uuid: "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+  notify_uuid: "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+  write_uuid: "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+  
+  # Connection settings
+  scan_timeout: 10.0  # seconds
+  reconnect_delay: 2.0  # seconds
+  max_reconnect_delay: 20.0  # seconds
+
+# SpecialPie specific settings  
+specialpie:
+  # Protocol configuration
+  frame_timeout: 1.0  # seconds
+  max_frame_size: 64  # bytes
+  checksum_enabled: true
+  
+  # Watchdog settings
+  watchdog_timeout: 3.0  # seconds
+  health_ping_interval: 10.0  # seconds
+  
+  # Clock sync settings
+  clock_sync:
+    enabled: true
+    interval: 60.0  # seconds
+    max_skew_ms: 1000  # milliseconds
+  
+  # Connection settings
+  serial:
+    # Auto-detection by USB VID/PID
+    vid_pid_list:
+      - [0x1234, 0x5678]  # SpecialPie USB IDs
+    # Product string matching
+    product_strings:
+      - "SpecialPie Timer"
+      - "SP Timer"
+  
+  ble:
+    # Device name prefixes for scanning
+    name_prefixes:
+      - "SpecialPie"
+      - "SP-Timer"
+    # Service UUIDs to look for
+    service_uuids:
+      - "12345678-1234-1234-1234-123456789abc"
+    
+  simulator:
+    # Demo sequence configuration
+    demo_strings: 3
+    shots_per_string: 5
+    shot_intervals: [800, 250, 230, 240, 220]  # milliseconds
+
+# WebSocket configuration
+websocket:
+  # Event encoding settings
+  include_raw_data: true  # Include raw frame data in events
+  compress_json: false    # Compress JSON for transmission
+  
+  # Event filtering
+  event_filters:
+    - "shot"
+    - "string_start" 
+    - "string_stop"
+    - "timer_connected"
+    - "timer_disconnected"
+    # - "battery"      # Uncomment to include battery events
+    # - "clock_sync"   # Uncomment to include clock sync events
+
+# Logging configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "text"  # text, json
+  
+  # Structured logging fields
+  structured:
+    component: true
+    adapter: true
+    event_type: true
+    timestamp: true
+  
+  # Log destinations
+  destinations:
+    console: true
+    file:
+      enabled: true
+      path: "logs/bridge.log"
+      max_size: "10MB"
+      backup_count: 5
+
+# Metrics configuration (Prometheus)
+metrics:
+  enabled: true
+  port: 8080
+  path: "/metrics"
+  
+  # Custom metrics
+  timers:
+    - name: "shots_total"
+      type: "counter"
+      labels: ["adapter", "string_number"]
+      help: "Total number of shots detected"
+      
+    - name: "strings_total" 
+      type: "counter"
+      labels: ["adapter"]
+      help: "Total number of strings completed"
+      
+    - name: "timer_connected"
+      type: "gauge"
+      labels: ["adapter"]
+      help: "Timer connection status (1=connected, 0=disconnected)"
+      
+    - name: "timer_clock_skew_ms"
+      type: "gauge" 
+      labels: ["adapter"]
+      help: "Clock skew between device and host in milliseconds"
+
+# Development settings
+development:
+  # Enable debug features
+  debug_mode: false
+  
+  # Mock/simulator settings
+  enable_simulators: false
+  
+  # Testing configuration
+  test_mode: false
+  record_events: false
+  playback_file: null

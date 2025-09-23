@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timer Dashboard Integration Status</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <div class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
+                            <span class="text-white font-bold">🎯</span>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">Timer Dashboard Integration</h1>
+                            <p class="text-sm text-gray-500">React App Integration Status</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Integration Status -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">🔗 Integration Status</h2>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-600">Timer Dashboard Page</span>
+                            <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Added</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-600">Navigation Route</span>
+                            <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Added</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-600">App.tsx Updated</span>
+                            <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Complete</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-600">Navigation.tsx Updated</span>
+                            <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Complete</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Access Links -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">🚀 Quick Access</h2>
+                    <div class="space-y-3">
+                        <a href="http://192.168.1.124:5173/#/timer-dashboard" 
+                           class="flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-blue-600">🎯</span>
+                                <span class="text-sm font-medium text-gray-900">Timer Dashboard (React App)</span>
+                            </div>
+                            <span class="text-xs text-blue-600">→</span>
+                        </a>
+                        
+                        <a href="http://192.168.1.124:5173/#/timer" 
+                           class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-gray-600">⏱️</span>
+                                <span class="text-sm font-medium text-gray-900">Timer Control (Existing)</span>
+                            </div>
+                            <span class="text-xs text-gray-600">→</span>
+                        </a>
+                        
+                        <a href="http://192.168.1.124:5173/#/console" 
+                           class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-gray-600">🖥️</span>
+                                <span class="text-sm font-medium text-gray-900">Console Logs</span>
+                            </div>
+                            <span class="text-xs text-gray-600">→</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Status -->
+            <div class="mt-6 bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">🔌 API Status</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="text-center p-4 bg-gray-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Backend Health</p>
+                        <p id="backendStatus" class="text-lg font-semibold text-yellow-600">Checking...</p>
+                    </div>
+                    <div class="text-center p-4 bg-gray-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Database Views</p>
+                        <p id="dbStatus" class="text-lg font-semibold text-green-600">Ready</p>
+                    </div>
+                    <div class="text-center p-4 bg-gray-50 rounded-lg">
+                        <p class="text-sm text-gray-600">WebSocket</p>
+                        <p id="wsStatus" class="text-lg font-semibold text-yellow-600">Not Connected</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Integration Instructions -->
+            <div class="mt-6 bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">📝 Integration Complete</h2>
+                <div class="prose max-w-none">
+                    <p class="text-gray-600 mb-4">
+                        The Timer Dashboard has been successfully integrated into your React app! Here's what was added:
+                    </p>
+                    
+                    <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                        <h3 class="text-sm font-semibold text-blue-900 mb-2">🎯 New Navigation Item</h3>
+                        <p class="text-sm text-blue-800">
+                            Added "Timer Dashboard" to the navigation menu with route <code>/timer-dashboard</code>
+                        </p>
+                    </div>
+                    
+                    <div class="bg-green-50 rounded-lg p-4 mb-4">
+                        <h3 class="text-sm font-semibold text-green-900 mb-2">⚡ Live Features</h3>
+                        <ul class="text-sm text-green-800 space-y-1">
+                            <li>• Real-time shot display with performance ratings</li>
+                            <li>• Current string progress with split times</li>
+                            <li>• Today's leaderboard with best times</li>
+                            <li>• Live event stream from timer</li>
+                            <li>• WebSocket updates for real-time data</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-yellow-50 rounded-lg p-4">
+                        <h3 class="text-sm font-semibold text-yellow-900 mb-2">⚠️ Next Steps</h3>
+                        <p class="text-sm text-yellow-800">
+                            For live data, ensure the timer dashboard backend is running on port 8001 or 8002 
+                            to serve the API endpoints and WebSocket connections.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-white border-t mt-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="flex justify-between items-center text-sm text-gray-500">
+                    <div>
+                        LeadVille Impact Bridge © 2024 • Timer Dashboard Integration
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span>React Integration Complete</span>
+                        <span class="text-green-600">✅ Ready</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check backend status
+        async function checkBackendStatus() {
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/health`);
+                if (response.ok) {
+                    document.getElementById('backendStatus').textContent = 'Healthy';
+                    document.getElementById('backendStatus').className = 'text-lg font-semibold text-green-600';
+                } else {
+                    document.getElementById('backendStatus').textContent = 'Error';
+                    document.getElementById('backendStatus').className = 'text-lg font-semibold text-red-600';
+                }
+            } catch (error) {
+                document.getElementById('backendStatus').textContent = 'Offline';
+                document.getElementById('backendStatus').className = 'text-lg font-semibold text-red-600';
+            }
+        }
+
+        // Check on page load
+        document.addEventListener('DOMContentLoaded', checkBackendStatus);
+    </script>
+</body>
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille Timer Dashboard - Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <div class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
+                            <span class="text-white font-bold">🎯</span>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">LeadVille Timer Dashboard</h1>
+                            <p class="text-sm text-gray-500">Real-time shooting timer data</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span class="text-sm text-gray-600">Live Demo</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Timer Status -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">Timer Device</p>
+                            <p class="text-lg font-semibold text-gray-900">AMG_TIMER</p>
+                        </div>
+                        <div class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            active
+                        </div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <p class="text-gray-500">Total Events</p>
+                            <p class="font-semibold">66</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500">Avg Split</p>
+                            <p class="font-semibold">0.37s</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Current String -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <div class="flex items-center space-x-2">
+                            <h2 class="text-lg font-semibold text-gray-900">Current String</h2>
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                                7 shots
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6">
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">1</div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">Split: 0.64s</p>
+                                        <p class="text-xs text-gray-500">Total: 0.64s</p>
+                                    </div>
+                                </div>
+                                <div class="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">fair</div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">2</div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">Split: 0.61s</p>
+                                        <p class="text-xs text-gray-500">Total: 1.25s</p>
+                                    </div>
+                                </div>
+                                <div class="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">fair</div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">3</div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">Split: 0.19s</p>
+                                        <p class="text-xs text-gray-500">Total: 1.44s</p>
+                                    </div>
+                                </div>
+                                <div class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">excellent</div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">4</div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">Split: 0.23s</p>
+                                        <p class="text-xs text-gray-500">Total: 1.67s</p>
+                                    </div>
+                                </div>
+                                <div class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">excellent</div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">5</div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">Split: 0.41s</p>
+                                        <p class="text-xs text-gray-500">Total: 2.08s</p>
+                                    </div>
+                                </div>
+                                <div class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">good</div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">6</div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">Split: 0.67s</p>
+                                        <p class="text-xs text-gray-500">Total: 2.75s</p>
+                                    </div>
+                                </div>
+                                <div class="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">fair</div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">7</div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">Split: 0.40s</p>
+                                        <p class="text-xs text-gray-500">Total: 3.15s</p>
+                                    </div>
+                                </div>
+                                <div class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">good</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Today's Leaderboard -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <div class="flex items-center space-x-2">
+                            <h2 class="text-lg font-semibold text-gray-900">Today's Best Times</h2>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6">
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-yellow-500 text-white rounded-full flex items-center justify-center text-sm font-semibold">1</div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">AMG_TIMER</p>
+                                        <p class="text-xs text-gray-500">2 strings</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-lg font-bold text-gray-900">1.66s</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Events -->
+            <div class="mt-6 bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <div class="flex items-center space-x-2">
+                        <h2 class="text-lg font-semibold text-gray-900">Recent Events</h2>
+                        <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">Live</span>
+                    </div>
+                </div>
+                
+                <div class="p-6">
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                                <span class="text-sm font-medium text-gray-800">STOP</span>
+                                <span class="text-sm text-gray-600">3.15s</span>
+                            </div>
+                            <div class="text-xs text-gray-500">4:48:21 PM</div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                                <span class="text-sm font-medium text-gray-800">SHOT</span>
+                                <span class="text-sm text-gray-600">Shot #7</span>
+                                <span class="text-sm text-gray-600">0.40s</span>
+                            </div>
+                            <div class="text-xs text-gray-500">4:48:20 PM</div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                                <span class="text-sm font-medium text-gray-800">SHOT</span>
+                                <span class="text-sm text-gray-600">Shot #6</span>
+                                <span class="text-sm text-gray-600">0.67s</span>
+                            </div>
+                            <div class="text-xs text-gray-500">4:48:20 PM</div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                                <span class="text-sm font-medium text-gray-800">SHOT</span>
+                                <span class="text-sm text-gray-600">Shot #5</span>
+                                <span class="text-sm text-gray-600">0.41s</span>
+                            </div>
+                            <div class="text-xs text-gray-500">4:48:19 PM</div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                <span class="text-sm font-medium text-gray-800">START</span>
+                            </div>
+                            <div class="text-xs text-gray-500">4:48:18 PM</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-white border-t mt-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="flex justify-between items-center text-sm text-gray-500">
+                    <div>
+                        LeadVille Impact Bridge © 2024 • Timer Dashboard • Static Demo with Real Data
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span>Based on database views: shot_log_simple & timer_summary</span>
+                        <span class="text-green-600">Demo Ready</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

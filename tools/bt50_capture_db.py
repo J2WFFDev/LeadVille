@@ -184,6 +184,21 @@ def _ensure_db(path: str):
         """
     )
     con.commit()
+    # Timer events table for AMG timer (shot/start/stop)
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS timer_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts_ns INTEGER,
+            device_id TEXT,
+            event_type TEXT,
+            split_seconds REAL,
+            split_cs INTEGER,
+            raw_hex TEXT
+        )
+        """
+    )
+    con.commit()
     con.close()
 
 
@@ -264,6 +279,24 @@ async def db_writer(queue: asyncio.Queue, db_path: str, batch_size: int = 50):
                 pending += 1
                 writer_metrics.setdefault('impacts', 0)
                 writer_metrics['impacts'] += 1
+            elif 'timer' in item:
+                te = item['timer'] or {}
+                # ts_ns may be provided; otherwise use current time
+                ts_ns = te.get('ts_ns') or int(time.time() * 1e9)
+                cur.execute(
+                    "INSERT INTO timer_events (ts_ns, device_id, event_type, split_seconds, split_cs, raw_hex) VALUES (?,?,?,?,?,?)",
+                    (
+                        ts_ns,
+                        item.get('device_id') or te.get('device_id'),
+                        te.get('event_type'),
+                        te.get('split_seconds'),
+                        te.get('split_cs'),
+                        te.get('raw_hex'),
+                    ),
+                )
+                pending += 1
+                writer_metrics.setdefault('timer_events', 0)
+                writer_metrics['timer_events'] += 1
             else:
                 sensor_mac = item.get('sensor_mac')
                 frame_hex = item.get('frame_hex')

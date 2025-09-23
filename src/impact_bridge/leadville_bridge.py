@@ -20,8 +20,10 @@ from bleak import BleakClient, BleakScanner
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Database imports for Bridge-assigned sensor lookup
-from .database.database import get_database_session
-from .database.models import Bridge, Sensor
+from impact_bridge.database.database import get_database_session
+from impact_bridge.database.models import Bridge, Sensor
+import sqlite3
+from pathlib import Path
 
 # Setup dual logging - both to console and file
 def setup_dual_logging():
@@ -159,12 +161,27 @@ class LeadVilleBridge:
         # 2. Development configuration
         self.dev_config = dev_config
         self.logger.info("📋 Loaded development config from config/development.yaml")
-        
+
+        # Defensive helpers to support older/newer dev_config shapes
+        def _cfg_get_expected_delay(cfg, default=1035):
+            if hasattr(cfg, 'get_expected_delay'):
+                try:
+                    return cfg.get_expected_delay()
+                except Exception:
+                    pass
+            return getattr(cfg, 'expected_delay_ms', default)
+
         # 3. Timing calibrator (before config display)
         self.timing_calibrator = RealTimeTimingCalibrator(
-            Path("timing_calibration.json"),
-            expected_delay_ms=dev_config.get_expected_delay()
+            Path("timing_calibration.json")
         )
+        # Apply configured expected delay if the calibrator API doesn't accept it
+        try:
+            cfg_expected = _cfg_get_expected_delay(dev_config)
+            self.timing_calibrator.calibration.expected_delay_ms = int(cfg_expected)
+        except Exception:
+            # ignore if setting fails
+            pass
         self.logger.info("Timing calibrator initialized")
         self.logger.info(f"Expected delay: 1035ms")
         self.logger.info(f"Correlation window: 1520.0ms")
@@ -394,14 +411,34 @@ class LeadVilleBridge:
             return False
             
     async def amg_notification_handler(self, characteristic, data):
-        """Handle AMG timer notifications"""
+        """Handle AMG timer notifications with enhanced parsing"""
         hex_data = data.hex()
         self.logger.debug(f"AMG notification: {hex_data}")
         
-        # Process AMG timer frames (shots, start/stop beeps)
+        # Try to use the new sophisticated parser for rich data extraction
+        try:
+            from impact_bridge.ble.amg_parse import parse_amg_timer_data, format_amg_event
+            parsed_data = parse_amg_timer_data(data)
+            
+            if parsed_data:
+                # Log the rich parsed information
+                formatted_event = format_amg_event(parsed_data)
+                self.logger.debug(f"AMG Enhanced: {formatted_event}")
+                
+                # Continue with existing logic but with parsed data available
+                # This allows us to log rich data while maintaining existing behavior
+                
+        except (ImportError, Exception) as e:
+            self.logger.debug(f"Enhanced AMG parsing not available: {e}")
+            parsed_data = None
+        
+        # Process AMG timer frames (shots, start/stop beeps) - original logic
         if len(data) >= 2:
             frame_header = data[0]
             frame_type = data[1]
+            
+            # Log ALL AMG frames for analysis
+            self.logger.info(f"🔍 AMG Frame: {hex_data} (header={frame_header:02X}, type={frame_type:02X})")
             
             # Handle START beep (0x0105)
             if frame_header == 0x01 and frame_type == 0x05:
@@ -410,6 +447,11 @@ class LeadVilleBridge:
                 string_number = data[13] if len(data) >= 14 else self.current_string_number
                 self.current_string_number = string_number
                 self.logger.info(f"📝 Status: Timer DC:1A - -------Start Beep ------- String #{string_number} at {self.start_beep_time.strftime('%H:%M:%S.%f')[:-3]}")
+                # persist timer START event to capture DB (best-effort)
+                try:
+                    self._persist_timer_event(event_type='START', raw_hex=hex_data, split_seconds=None, split_cs=None, parsed_data=parsed_data)
+                except Exception:
+                    self.logger.debug("Failed to persist timer START event")
                 
             # Handle SHOT event (0x0103)
             elif frame_header == 0x01 and frame_type == 0x03 and len(data) >= 14:
@@ -433,9 +475,14 @@ class LeadVilleBridge:
                 
                 self.previous_shot_time = shot_time
                 
-                # Record shot for timing correlation
-                if self.timing_calibrator:
+                # Record shot for timing correlation (skip if method doesn't exist)
+                if self.timing_calibrator and hasattr(self.timing_calibrator, 'record_shot'):
                     self.timing_calibrator.record_shot(shot_time, self.shot_counter, self.current_string_number)
+                # persist timer SHOT event to capture DB (best-effort)
+                try:
+                    self._persist_timer_event(event_type='SHOT', raw_hex=hex_data, split_seconds=timer_split_seconds, split_cs=split_cs, parsed_data=parsed_data)
+                except Exception:
+                    self.logger.debug("Failed to persist timer SHOT event")
                     
             # Handle STOP beep (0x0108)
             elif frame_header == 0x01 and frame_type == 0x08:
@@ -463,6 +510,89 @@ class LeadVilleBridge:
                 self.impact_counter = 0
                 self.shot_counter = 0
                 self.previous_shot_time = None
+                # persist timer STOP event to capture DB (best-effort)
+                try:
+                    self._persist_timer_event(event_type='STOP', raw_hex=hex_data, split_seconds=timer_seconds, split_cs=time_cs, parsed_data=parsed_data)
+                except Exception:
+                    self.logger.debug("Failed to persist timer STOP event")
+            else:
+                # Catch-all for unknown AMG frames (likely summary events)
+                self.logger.info(f"🔍 AMG Unknown Frame: {hex_data} - Possibly Summary Event")
+                try:
+                    # Store unknown frames as "UNKNOWN" events for analysis
+                    self._persist_timer_event(event_type='UNKNOWN', raw_hex=hex_data, split_seconds=None, split_cs=None)
+                except Exception:
+                    self.logger.debug("Failed to persist unknown AMG event")
+
+    def _persist_timer_event(self, event_type: str, raw_hex: str = None, split_seconds: float = None, split_cs: int = None, parsed_data: dict = None):
+        """Best-effort persist of timer event into the capture DB (logs/bt50_samples.db).
+
+        This is intentionally lightweight and synchronous; it avoids coupling to the
+        capture process queue and uses WAL mode for safe concurrent writes.
+        """
+        try:
+            # Try multiple possible database paths based on Pi deployment
+            possible_paths = [
+                Path(__file__).parent.parent.parent / 'logs' / 'bt50_samples.db',  # /home/jrwest/logs/
+                Path(__file__).parent.parent / 'logs' / 'bt50_samples.db',        # project/logs/
+                Path('/home/jrwest/logs/bt50_samples.db'),                        # absolute path
+            ]
+            
+            # Find existing database or use first path as default
+            db_path = possible_paths[0]  # Default
+            for path in possible_paths:
+                if path.exists():
+                    db_path = path
+                    break
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            con = sqlite3.connect(str(db_path))
+            cur = con.cursor()
+            cur.execute("PRAGMA journal_mode=WAL")
+            # Ensure timer_events table exists so bridge can write even if capture
+            # process hasn't been started to create schema.
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS timer_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts_ns INTEGER,
+                    device_id TEXT,
+                    event_type TEXT,
+                    split_seconds REAL,
+                    split_cs INTEGER,
+                    raw_hex TEXT
+                )
+                """
+            )
+            ts_ns = int(time.time() * 1e9)
+            # Extract structured data for hybrid schema
+            current_shot = None
+            total_shots = None
+            current_round = None
+            string_total_time = None
+            parsed_json = None
+            
+            if parsed_data:
+                import json
+                current_shot = parsed_data.get('current_shot')
+                total_shots = parsed_data.get('total_shots')
+                current_round = parsed_data.get('current_round')
+                string_total_time = parsed_data.get('current_time')
+                parsed_json = json.dumps(parsed_data)
+            
+            cur.execute(
+                """INSERT INTO timer_events 
+                   (ts_ns, device_id, event_type, split_seconds, split_cs, raw_hex, 
+                    current_shot, total_shots, current_round, string_total_time, parsed_json) 
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (ts_ns, "AMG_TIMER", event_type, split_seconds, split_cs, raw_hex,
+                 current_shot, total_shots, current_round, string_total_time, parsed_json),
+            )
+            con.commit()
+            con.close()
+        except Exception as e:
+            # swallow errors - this is best-effort logging
+            self.logger.debug(f"Timer event persistence failed: {e}")
+            pass
                 
     async def bt50_notification_handler(self, characteristic, data):
         """Handle BT50 sensor notifications with impact detection"""

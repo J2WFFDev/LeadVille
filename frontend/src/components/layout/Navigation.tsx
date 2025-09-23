@@ -13,6 +13,8 @@ interface NavigationItem {
 const navigationItems: NavigationItem[] = [
   { path: '/', label: 'Dashboard', icon: '📊' },
   { path: '/timer', label: 'Timer Control', icon: '⏱️' },
+  { path: '/timer-dashboard', label: 'Timer Dashboard', icon: '🎯' },
+  { path: '/live-log', label: 'Live Log', icon: '�' },
   { path: '/sensor', label: 'Sensor Monitor', icon: '📡' },
   { path: '/stage-setup', label: 'Stage Setup', icon: '🏟️' },
   { path: '/ro', label: 'Range Officer', icon: '🎯' },
