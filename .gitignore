@@ -1,3 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+/.venv/
+venv/
+ENV/
+
+# Distribution / packaging
+/build/
+/dist/
+*.egg-info/
+
+# Logs and exports (keep DB files if tracked intentionally)
+logs/
+*.log
+*.csv
+*.ndjson
+
+# SQLite runtime files
+*.db-shm
+*.db-wal
+
+# Test / cache
+.pytest_cache/
+.mypy_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+*.sublime-project
+*.sublime-workspace
 # LeadVille Impact Bridge - Git Ignore
 
 # Python

@@ -275,6 +275,14 @@ class LeadVilleBridge:
                         timer_mac = sensor.hw_addr
                     elif any(keyword in sensor.label.upper() for keyword in ['BT50', 'WTVB']):
                         sensor_macs.append(sensor.hw_addr)
+
+                # If no sensors matched by label heuristics, fall back to returning
+                # all assigned sensor hardware addresses. This makes the bridge
+                # resilient to sensors that were paired with non-standard labels
+                # (e.g., when labels are user-defined) and prevents an empty
+                # sensor list which would stop the bridge from connecting.
+                if not sensor_macs:
+                    sensor_macs = [s.hw_addr for s in assigned_sensors if getattr(s, 'hw_addr', None)]
                 
                 self.logger.info(f"Bridge '{bridge.name}' assigned to stage '{bridge.current_stage.name}'")
                 self.logger.info(f"Timer: {timer_mac}")

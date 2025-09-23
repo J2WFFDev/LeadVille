@@ -85,9 +85,16 @@ class Bridge:
             self._tasks.append(amg_task)
         
         # Start BT50 sensors
-        for sensor_config in self.config.sensors:
-            bt50_task = asyncio.create_task(self._run_bt50(sensor_config))
-            self._tasks.append(bt50_task)
+        if not self.config.sensors:
+            self.logger.status("No BT50 sensors configured", {"sensor_count": 0})
+        else:
+            # Log configured sensors for troubleshooting
+            configured = [{"sensor": s.sensor, "mac": s.mac, "plate": getattr(s, 'plate', None)} for s in self.config.sensors]
+            self.logger.status("Configured BT50 sensors", {"sensors": configured})
+
+            for sensor_config in self.config.sensors:
+                bt50_task = asyncio.create_task(self._run_bt50(sensor_config))
+                self._tasks.append(bt50_task)
         
         # Status reporting task
         status_task = asyncio.create_task(self._status_loop())
