@@ -260,75 +260,65 @@ class LeadVilleBridge:
     def get_bridge_assigned_devices(self):
         """Get MAC addresses of devices assigned to this Bridge"""
         try:
-            # Use the same config as bridge initialization
+            # Use raw SQLite to test the database connection
             project_root = Path(__file__).parent.parent.parent
-            db_config = DatabaseConfig(
-                dir=str(project_root / "db"),
-                file="leadville.db",
-                enable_ingest=True,
-                echo=False
-            )
+            db_path = project_root / "db" / "leadville.db"
             
-            with get_database_session(db_config) as session:
-                bridge = session.query(Bridge).first()
-                self.logger.info(f"Bridge query result: {bridge}")
-                if bridge:
-                    self.logger.info(f"Bridge current_stage_id: {bridge.current_stage_id}")
-                
-                if not bridge or not bridge.current_stage_id:
-                    self.logger.warning("No Bridge or stage assignment found - using default devices")
-                    return {
-                        'timer': "60:09:C3:1F:DC:1A",  # Default AMG timer
-                        'sensors': ["EA:18:3D:6D:BA:E5", "C2:1B:DB:F0:55:50"]  # Default BT50 sensors
-                    }
-                
-                # Get target configs for this stage directly with SQL
-                from impact_bridge.database.models import TargetConfig
-                target_configs = session.query(TargetConfig).filter(
-                    TargetConfig.stage_config_id == bridge.current_stage_id
-                ).all()
-                
-                self.logger.info(f"Found {len(target_configs)} target configs for stage {bridge.current_stage_id}")
-                target_config_ids = [tc.id for tc in target_configs]
-                
-                if not target_config_ids:
-                    self.logger.warning(f"No targets found for stage {bridge.current_stage_id}")
-                    return {'timer': None, 'sensors': []}
-                
-                assigned_sensors = session.query(Sensor).filter(
-                    Sensor.target_config_id.in_(target_config_ids),
-                    Sensor.bridge_id == bridge.id
-                ).all()
-                
-                self.logger.info(f"Found {len(assigned_sensors)} sensors assigned to bridge and stage")
-                
-                # Separate timer and impact sensors
-                timer_mac = None
-                sensor_macs = []
-                
-                for sensor in assigned_sensors:
-                    # AMG timers have "AMG" or "COMM" in their label
-                    if any(keyword in sensor.label.upper() for keyword in ['AMG', 'COMM', 'TIMER']):
-                        timer_mac = sensor.hw_addr
-                    elif any(keyword in sensor.label.upper() for keyword in ['BT50', 'WTVB']):
-                        sensor_macs.append(sensor.hw_addr)
-
-                # If no sensors matched by label heuristics, fall back to returning
-                # all assigned sensor hardware addresses. This makes the bridge
-                # resilient to sensors that were paired with non-standard labels
-                # (e.g., when labels are user-defined) and prevents an empty
-                # sensor list which would stop the bridge from connecting.
-                if not sensor_macs:
-                    sensor_macs = [s.hw_addr for s in assigned_sensors if getattr(s, 'hw_addr', None)]
-                
-                self.logger.info(f"Bridge '{bridge.name}' assigned to stage '{bridge.current_stage.name}'")
-                self.logger.info(f"Timer: {timer_mac}")
-                self.logger.info(f"Impact Sensors: {sensor_macs}")
-                
+            self.logger.info(f"Attempting to query database at: {db_path}")
+            self.logger.info(f"Database file exists: {db_path.exists()}")
+            
+            if not db_path.exists():
+                self.logger.error(f"Database file not found: {db_path}")
                 return {
-                    'timer': timer_mac,
-                    'sensors': sensor_macs
+                    'timer': "60:09:C3:1F:DC:1A",  # Default AMG timer
+                    'sensors': ["EA:18:3D:6D:BA:E5", "C2:1B:DB:F0:55:50"]  # Default BT50 sensors
                 }
+            
+            # Raw SQLite query to test the database
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.cursor()
+            
+            # Test basic query
+            cursor.execute("SELECT COUNT(*) FROM bridges")
+            bridge_count = cursor.fetchone()[0]
+            self.logger.info(f"Bridge count in database: {bridge_count}")
+            
+            cursor.execute("SELECT id, name, current_stage_id FROM bridges LIMIT 1")
+            bridge_row = cursor.fetchone()
+            self.logger.info(f"First bridge record: {bridge_row}")
+            
+            conn.close()
+            
+            # If we found a bridge with stage assignment, try the SQLAlchemy query
+            if bridge_row and bridge_row[2]:  # current_stage_id exists
+                db_config = DatabaseConfig(
+                    dir=str(project_root / "db"),
+                    file="leadville.db",
+                    enable_ingest=True,
+                    echo=False
+                )
+                
+                with get_database_session(db_config) as session:
+                    bridge = session.query(Bridge).first()
+                    self.logger.info(f"SQLAlchemy bridge query result: {bridge}")
+                    if bridge:
+                        self.logger.info(f"Bridge current_stage_id: {bridge.current_stage_id}")
+            
+            # For now, return defaults while debugging
+            return {
+                'timer': "60:09:C3:1F:DC:1A",  # Default AMG timer
+                'sensors': ["EA:18:3D:6D:BA:E5", "C2:1B:DB:F0:55:50"]  # Default BT50 sensors
+            }
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to get Bridge assignments: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return {
+                'timer': "60:09:C3:1F:DC:1A",  # Default AMG timer 
+                'sensors': ["EA:18:3D:6D:BA:E5", "C2:1B:DB:F0:55:50"]  # Default BT50 sensors
+            }
                 
         except Exception as e:
             self.logger.error(f"Failed to get Bridge assignments: {e}")
