@@ -263,10 +263,10 @@ class AuthService:
 
 def get_auth_service() -> AuthService:
     """Get authentication service instance"""
-        from ..config import DatabaseConfig
-        db_config = DatabaseConfig()
-        with get_database_session(db_config) as session:
-            return AuthService(session)
+    from ..config import DatabaseConfig
+    db_config = DatabaseConfig()
+    with get_database_session(db_config) as session:
+        return AuthService(session)
 
 
 def require_auth(f):
@@ -283,19 +283,18 @@ def require_auth(f):
                 return jsonify({"error": "Invalid token type"}), 401
         except ValueError:
             return jsonify({"error": "Invalid authorization header"}), 401
-        
-            from ..config import DatabaseConfig
-            db_config = DatabaseConfig()
-            with get_database_session(db_config) as session:
-                auth_service = AuthService(session)
-                user = auth_service.get_user_from_token(token)
-        
+        from ..config import DatabaseConfig
+        db_config = DatabaseConfig()
+        with get_database_session(db_config) as session:
+            auth_service = AuthService(session)
+            user = auth_service.get_user_from_token(token)
+
         if not user:
             return jsonify({"error": "Invalid or expired token"}), 401
-        
+
         # Store user in Flask's g object for use in route handlers
         g.current_user = user
-        
+
         return f(*args, **kwargs)
     
     return decorated_function
