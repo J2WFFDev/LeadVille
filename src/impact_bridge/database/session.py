@@ -20,10 +20,10 @@ def get_db_session():
             # Determine project root and use bridge.db (which has the correct schema)
             project_root = Path(__file__).parent.parent.parent.parent
             
-            # Use bridge.db as it has the correct schema with bridge_id column
+            # Use leadville.db as the primary database with configuration data
             database_config = DatabaseConfig(
                 dir=str(project_root / "db"),
-                file="bridge.db",
+                file="leadville.db",
                 enable_ingest=True,
                 echo=False
             )
