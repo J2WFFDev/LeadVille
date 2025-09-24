@@ -92,7 +92,7 @@ def get_shot_log(limit: int = 100):
             candidates.append(Path(env_db))
         # Preferred project location
             # Preferred canonical location inside the project and explicit override via env var.
-            candidates.append(project_root / 'db' / 'bt50_samples.db')
+            candidates.append(project_root / 'db' / 'leadville_runtime.db')
             # Also allow explicit override via CAPTURE_DB_PATH environment variable (checked above).
         
             # Legacy locations removed

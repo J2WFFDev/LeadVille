@@ -570,16 +570,16 @@ class LeadVilleBridge:
                     self.logger.debug("Failed to persist unknown AMG event")
 
     def _persist_timer_event(self, event_type: str, raw_hex: str = None, split_seconds: float = None, split_cs: int = None, parsed_data: dict = None):
-        """Best-effort persist of timer event into the capture DB (logs/bt50_samples.db).
+        """Best-effort persist of timer event into the capture DB (db/leadville_runtime.db).
 
         This is intentionally lightweight and synchronous; it avoids coupling to the
         capture process queue and uses WAL mode for safe concurrent writes.
         """
         try:
-            # Prefer the canonical project DB location `db/bt50_samples.db` (new layout).
+            # Prefer the canonical project DB location `db/leadville_runtime.db` (new layout).
             # Keep legacy fallbacks for older deployments that still use `logs/`.
             # Prefer explicit env override, then use project db location
-            project_db = Path(__file__).parent.parent.parent / 'db' / 'bt50_samples.db'
+            project_db = Path(__file__).parent.parent.parent / 'db' / 'leadville_runtime.db'
             env_db = os.environ.get('CAPTURE_DB_PATH')
             if env_db:
                 db_path = Path(env_db)
@@ -642,7 +642,7 @@ class LeadVilleBridge:
             
         try:
             # Persist verbose parsed frames for offline analysis if sample logging
-            # is enabled (this writes to logs/bt50_samples.db)
+            # is enabled (this writes to db/leadville_runtime.db)
             try:
                 write_db = False
                 if hasattr(self, 'dev_config') and self.dev_config:
