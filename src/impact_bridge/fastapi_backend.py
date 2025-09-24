@@ -84,19 +84,43 @@ def get_shot_log(limit: int = 100):
         import sqlite3
         from pathlib import Path
 
-        # Determine capture DB path from environment or default to project 'db/bt50_samples.db'
+        # Determine capture DB path candidates and prefer an explicit env var
         project_root = Path(__file__).parent.parent.parent
-        default_db = project_root / 'db' / 'bt50_samples.db'
+        candidates = []
         env_db = os.environ.get('CAPTURE_DB_PATH')
-        db_path = Path(env_db) if env_db else default_db
+        if env_db:
+            candidates.append(Path(env_db))
+        # Preferred project location
+        candidates.append(project_root / 'db' / 'bt50_samples.db')
+        # Explicit absolute project path (common on Pi)
+        candidates.append(Path('/home/jrwest/projects/LeadVille/db/bt50_samples.db'))
+        # Legacy locations
+        candidates.append(project_root / 'logs' / 'bt50_samples.db')
+        candidates.append(Path('/home/jrwest/logs/bt50_samples.db'))
 
-        # Check if database exists
-        if not db_path.exists():
-            logger.warning(f"Capture DB not found at {db_path}")
-            return JSONResponse(
-                content={"error": "Database not found", "logs": []},
-                status_code=404
-            )
+        db_path = None
+        # Try candidates in order and log what we check
+        for candidate in candidates:
+            try:
+                exists = candidate.exists()
+            except Exception as e:
+                exists = False
+                logger.debug(f"Error checking path {candidate}: {e}")
+            logger.info(f"Checking capture DB candidate: {candidate} exists={exists}")
+            if exists:
+                db_path = candidate
+                break
+
+        if db_path is None:
+            logger.warning(f"No capture DB found among candidates: {candidates}")
+            return JSONResponse(content={"error": "Database not found", "logs": []}, status_code=404)
+
+        # Log basic file info for diagnostics
+        try:
+            st = db_path.stat()
+            logger.info(f"Using capture DB: {db_path} size={st.st_size} mtime={st.st_mtime}")
+        except Exception:
+            logger.info(f"Using capture DB: {db_path} (stat unavailable)")
 
         # Open database connection (read-only is fine for API reads)
         conn = sqlite3.connect(str(db_path))
