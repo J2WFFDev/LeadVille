@@ -1303,11 +1303,11 @@ async def startup_event():
             from src.impact_bridge.config import DatabaseConfig
             from src.impact_bridge.database import init_database
             
-            # Use absolute path to database in project root
+            # Use absolute path to database in project db/ directory
             project_root = Path(__file__).parent.parent.parent
             
             config = DatabaseConfig()
-            config.dir = str(project_root)
+            config.dir = str(project_root / "db")
             config.file = "leadville.db"
             
             init_database(config)
