@@ -131,3 +131,6 @@ site/
 *.db-shm
 *.db-wal
 *.log
+# db runtime files
+db/*.db
+

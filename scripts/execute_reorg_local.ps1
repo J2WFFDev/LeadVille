@@ -1,5 +1,8 @@
 # Execute local reorganization: move logs to logs/, db files to db/, move setup scripts to deploy/, update .gitignore
-Set-Location -Path (Split-Path -Parent $MyInvocation.MyCommand.Definition)
+# Ensure we run from the repository root (parent of the scripts/ folder)
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$repoRoot = Split-Path -Parent $scriptDir
+Set-Location -Path $repoRoot
 
 # Create directories
 New-Item -ItemType Directory -Path db -Force | Out-Null
@@ -34,8 +37,8 @@ if (-not (Select-String -Path .gitignore -Pattern '^db/?' -Quiet)) {
     Add-Content -Path .gitignore -Value "# db runtime files`ndb/*.db`n"
 }
 
-# Untrack DB if necessary
-try { git rm --cached db/bt50_samples.db -ErrorAction SilentlyContinue } catch {}
+# Untrack DB if necessary (call git directly so PowerShell parameters aren't passed to git)
+try { & git rm --cached db/bt50_samples.db } catch {}
 
 # Commit changes
 git add -A
