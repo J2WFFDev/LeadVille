@@ -539,15 +539,19 @@ class LeadVilleBridge:
         capture process queue and uses WAL mode for safe concurrent writes.
         """
         try:
-            # Try multiple possible database paths based on Pi deployment
+            # Prefer the canonical project DB location `db/bt50_samples.db` (new layout).
+            # Keep legacy fallbacks for older deployments that still use `logs/`.
+            project_db = Path(__file__).parent.parent.parent / 'db' / 'bt50_samples.db'
             possible_paths = [
-                Path(__file__).parent.parent.parent / 'logs' / 'bt50_samples.db',  # /home/jrwest/logs/
-                Path(__file__).parent.parent / 'logs' / 'bt50_samples.db',        # project/logs/
-                Path('/home/jrwest/logs/bt50_samples.db'),                        # absolute path
+                project_db,                                                         # project/db/bt50_samples.db (preferred)
+                Path(__file__).parent.parent.parent / 'logs' / 'bt50_samples.db',   # historical project/logs/
+                Path(__file__).parent.parent / 'logs' / 'bt50_samples.db',         # src/logs/ fallback
+                Path('/home/jrwest/projects/LeadVille/db/bt50_samples.db'),         # absolute project path on Pi
+                Path('/home/jrwest/logs/bt50_samples.db'),                         # legacy absolute logs
             ]
-            
-            # Find existing database or use first path as default
-            db_path = possible_paths[0]  # Default
+
+            # Find existing database or use preferred project_db as default
+            db_path = project_db
             for path in possible_paths:
                 if path.exists():
                     db_path = path

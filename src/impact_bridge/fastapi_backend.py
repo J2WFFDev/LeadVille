@@ -84,17 +84,21 @@ def get_shot_log(limit: int = 100):
         import sqlite3
         from pathlib import Path
 
-        # Path to the database (on Raspberry Pi)
-        db_path = Path("/home/jrwest/projects/LeadVille/db/bt50_samples.db")
+        # Determine capture DB path from environment or default to project 'db/bt50_samples.db'
+        project_root = Path(__file__).parent.parent.parent
+        default_db = project_root / 'db' / 'bt50_samples.db'
+        env_db = os.environ.get('CAPTURE_DB_PATH')
+        db_path = Path(env_db) if env_db else default_db
 
         # Check if database exists
         if not db_path.exists():
+            logger.warning(f"Capture DB not found at {db_path}")
             return JSONResponse(
                 content={"error": "Database not found", "logs": []},
                 status_code=404
             )
 
-        # Query shot_log view
+        # Open database connection (read-only is fine for API reads)
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
 
