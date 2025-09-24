@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from ..config import DatabaseConfig
 import os
+from pathlib import Path
 
 # Create a simple session factory without relying on the global variable
 _session_factory = None
@@ -16,11 +17,13 @@ def get_db_session():
     
     if _session_factory is None:
         try:
-            # Initialize database with absolute path to ensure we use the right database
-            database_path = "/home/jrwest/projects/LeadVille"
+            # Determine project root and use bridge.db (which has the correct schema)
+            project_root = Path(__file__).parent.parent.parent.parent
+            
+            # Use bridge.db as it has the correct schema with bridge_id column
             database_config = DatabaseConfig(
-                dir=database_path,
-                file="leadville.db",
+                dir=str(project_root / "db"),
+                file="bridge.db",
                 enable_ingest=True,
                 echo=False
             )
