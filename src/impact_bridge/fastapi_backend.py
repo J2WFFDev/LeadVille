@@ -6,6 +6,7 @@ Mirrors Flask API structure for health and logs endpoints, CORS, and log parsing
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from datetime import datetime
 import os
@@ -55,6 +56,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include device pool management routes
+from src.impact_bridge.pool_api import router as pool_router
+app.include_router(pool_router)
+
+# Mount static files for dashboard pages
+try:
+    docs_path = project_root / "docs"
+    if docs_path.exists():
+        app.mount("/docs", StaticFiles(directory=str(docs_path)), name="docs")
+        logger.info(f"Mounted static files from {docs_path}")
+    else:
+        logger.warning(f"Docs directory not found at {docs_path}")
+except Exception as e:
+    logger.error(f"Failed to mount static files: {e}")
 
 # Log directories for original LeadVille structure
 LOG_DIRS = [
@@ -393,6 +409,168 @@ async def discover_devices(duration: int = 10):
             content={"error": f"Device discovery failed: {str(e)}"},
             status_code=500
         )
+
+@app.websocket("/ws/admin/devices/discover")
+async def websocket_discover_devices(websocket: WebSocket, duration: int = 10):
+    """Discover BLE devices with real-time WebSocket streaming"""
+    await websocket.accept()
+    
+    try:
+        from src.impact_bridge.device_manager import device_manager
+        import asyncio
+        import time
+        
+        # Send start message
+        await websocket.send_json({
+            "type": "start",
+            "duration": duration,
+            "message": "Starting BLE device discovery..."
+        })
+        
+        if device_manager.scanning:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Discovery already in progress"
+            })
+            return
+            
+        device_manager.scanning = True
+        device_manager.discovered_devices.clear()
+        discovered_devices = []
+        
+        try:
+            from bleak import BleakScanner
+            
+            # Start scanning with periodic discovery (compatible with Bleak 1.1.0)
+            start_time = time.time()
+            last_discovery_check = 0
+            check_interval = 3  # Check for new devices every 3 seconds
+            scan_timeout = 2.0  # Each scan takes 2 seconds
+            
+            # Send initial progress
+            await websocket.send_json({
+                "type": "progress",
+                "elapsed": 0,
+                "remaining": duration,
+                "progress": 0,
+                "devices_found": len(discovered_devices),
+                "scan_status": "Starting discovery..."
+            })
+            
+            # Main discovery loop
+            while time.time() - start_time < duration:
+                current_time = time.time()
+                elapsed = round(current_time - start_time, 1)
+                remaining = max(0, duration - elapsed)
+                overall_progress = (elapsed / duration) * 100
+                
+                # Discover devices periodically 
+                if current_time - last_discovery_check >= check_interval:
+                    # Send scanning status
+                    await websocket.send_json({
+                        "type": "progress",
+                        "elapsed": elapsed,
+                        "remaining": remaining,
+                        "progress": overall_progress,
+                        "devices_found": len(discovered_devices),
+                        "scan_status": f"Scanning for devices... ({scan_timeout:.1f}s)"
+                    })
+                    
+                    try:
+                        # Start scan with progress tracking
+                        scan_start = time.time()
+                        devices = await BleakScanner.discover(timeout=scan_timeout)
+                        scan_duration = time.time() - scan_start
+                        
+                        new_devices_found = 0
+                        for device in devices:
+                            try:
+                                # Analyze device to see if it's relevant
+                                device_info = await device_manager._analyze_device(device)
+                                if device_info and device_manager._is_relevant_device(device_info):
+                                    # Check if we already found this device
+                                    if device.address not in [d["address"] for d in discovered_devices]:
+                                        discovered_devices.append(device_info)
+                                        device_manager.discovered_devices[device.address] = device_info
+                                        new_devices_found += 1
+                                        
+                                        # Send device found message immediately
+                                        await websocket.send_json({
+                                            "type": "device_found",
+                                            "device": device_info,
+                                            "count": len(discovered_devices),
+                                            "elapsed": round(time.time() - start_time, 1)
+                                        })
+                            except Exception as e:
+                                logger.debug(f"Error analyzing device {device.address}: {e}")
+                                
+                        last_discovery_check = current_time
+                        
+                        # Send scan complete status
+                        updated_elapsed = round(time.time() - start_time, 1)
+                        await websocket.send_json({
+                            "type": "progress",
+                            "elapsed": updated_elapsed,
+                            "remaining": max(0, duration - updated_elapsed),
+                            "progress": (updated_elapsed / duration) * 100,
+                            "devices_found": len(discovered_devices),
+                            "scan_status": f"Scan complete - Found {new_devices_found} new devices ({scan_duration:.1f}s)"
+                        })
+                        
+                        logger.debug(f"Discovery scan completed in {scan_duration:.1f}s, found {new_devices_found} new devices, total: {len(discovered_devices)}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error during device scan: {e}")
+                        await websocket.send_json({
+                            "type": "progress",
+                            "elapsed": elapsed,
+                            "remaining": remaining,
+                            "progress": overall_progress,
+                            "devices_found": len(discovered_devices),
+                            "scan_status": f"Scan error: {str(e)}"
+                        })
+                else:
+                    # Send waiting status between scans
+                    time_until_next_scan = check_interval - (current_time - last_discovery_check)
+                    await websocket.send_json({
+                        "type": "progress",
+                        "elapsed": elapsed,
+                        "remaining": remaining,
+                        "progress": overall_progress,
+                        "devices_found": len(discovered_devices),
+                        "scan_status": f"Waiting {time_until_next_scan:.1f}s until next scan..."
+                    })
+                
+                # Short sleep to prevent busy waiting
+                await asyncio.sleep(0.5)
+            
+            # Send completion message
+            await websocket.send_json({
+                "type": "complete",
+                "devices": discovered_devices,
+                "count": len(discovered_devices),
+                "duration": duration,
+                "message": f"Discovery complete - Found {len(discovered_devices)} devices"
+            })
+            
+        except Exception as e:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Discovery failed: {str(e)}"
+            })
+        finally:
+            device_manager.scanning = False
+            
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected during device discovery")
+        if 'device_manager' in locals():
+            device_manager.scanning = False
+    except Exception as e:
+        logger.error(f"WebSocket discovery error: {e}")
+        await websocket.send_json({
+            "type": "error", 
+            "message": f"WebSocket error: {str(e)}"
+        })
 
 @app.post("/api/admin/devices/pair")
 async def pair_device(request: Request):
