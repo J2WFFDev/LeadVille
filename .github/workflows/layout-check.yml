@@ -1,0 +1,16 @@
+name: Layout check
+on: [pull_request, push]
+
+jobs:
+  layout-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run layout audit (dry-run)
+        run: |
+          python3 scripts/ensure_layout.py > layout_out.txt
+          if grep -q "Found misplaced files" layout_out.txt; then
+            echo "Repository root contains misplaced files. Run scripts/ensure_layout.py --move --commit --yes locally and push again."
+            cat layout_out.txt
+            exit 1
+          fi
