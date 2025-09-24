@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 # Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from impact_bridge.database.database import init_database
 from impact_bridge.database.views import create_shot_log_view, create_string_summary_view, drop_views
