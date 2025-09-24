@@ -261,7 +261,15 @@ class LeadVilleBridge:
         """Get MAC addresses of devices assigned to this Bridge"""
         try:
             # Use raw SQLite to test the database connection
-            project_root = Path(__file__).parent.parent.parent
+            # Note: when running as symlink, __file__ points to symlink location 
+            # so we need to find the actual project root
+            if "projects/LeadVille" in str(__file__):
+                # Extract the project root from the file path
+                project_root = Path(str(__file__).split("projects/LeadVille")[0]) / "projects" / "LeadVille"
+            else:
+                # Fallback for other scenarios
+                project_root = Path(__file__).parent.parent.parent
+            
             db_path = project_root / "db" / "leadville.db"
             
             self.logger.info(f"__file__: {__file__}")
