@@ -6,7 +6,7 @@ import sqlite3
 import csv
 import os
 
-DB = "projects/LeadVille/logs/bt50_samples.db"
+DB = "projects/LeadVille/db/bt50_samples.db"
 OUT = "projects/LeadVille/logs/bt50_samples_export.csv"
 
 if not os.path.exists(DB):

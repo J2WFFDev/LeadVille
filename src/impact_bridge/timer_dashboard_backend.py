@@ -82,7 +82,7 @@ class WebSocketManager:
 class DatabaseManager:
     """Manages database connections and queries"""
     
-    def __init__(self, db_path: str = "logs/bt50_samples.db"):
+    def __init__(self, db_path: str = "db/bt50_samples.db"):
         self.db_path = Path(db_path)
         if not self.db_path.exists():
             raise FileNotFoundError(f"Database not found: {self.db_path}")

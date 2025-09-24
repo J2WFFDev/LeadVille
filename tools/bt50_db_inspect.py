@@ -6,7 +6,7 @@ import sqlite3
 import os
 import sys
 
-DB_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'logs', 'bt50_samples.db'))
+DB_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'db', 'bt50_samples.db'))
 
 if not os.path.exists(DB_PATH):
     print(f"DB not found: {DB_PATH}")

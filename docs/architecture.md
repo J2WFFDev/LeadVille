@@ -5,7 +5,7 @@ This document maps the LeadVille project components, how they relate, and the ru
 ### High-level overview
 - The core BLE bridge runs on the Raspberry Pi and is started by `systemd` as the authoritative runtime. The bridge communicates with BT50 vibration sensors and AMG timer devices via BLE.
 - The bridge produces NDJSON logs and emits real-time events to an `EventStreamer` (WebSockets / optional MQTT).
-- A separate capture/ingest process writes NDJSON or bridge-generated events into the capture SQLite DB (`logs/bt50_samples.db`), which exposes a `shot_log` view used by the FastAPI backend and frontend.
+- A separate capture/ingest process writes NDJSON or bridge-generated events into the capture SQLite DB (`db/bt50_samples.db`), which exposes a `shot_log` view used by the FastAPI backend and frontend.
 
 ### Major components (files & purpose)
 - `leadville_bridge.py` (repo root)

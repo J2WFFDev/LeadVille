@@ -33,7 +33,7 @@ def touch_last_vac():
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--db", default="logs/bt50_samples.db")
+    p.add_argument("--db", default="db/bt50_samples.db")
     p.add_argument("--days", type=int, default=30)
     p.add_argument("--vacuum-weekly", action="store_true")
     p.add_argument("--yes", action="store_true")

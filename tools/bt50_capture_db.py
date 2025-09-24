@@ -102,7 +102,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('bt50_capture_db')
 
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'logs', 'bt50_samples.db')
+DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'db', 'bt50_samples.db')
 
 # Samples with all motion values below this threshold are considered status-only
 # (values are in raw register units; tune per your calibration)

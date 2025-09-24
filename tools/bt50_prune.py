@@ -8,8 +8,8 @@ Safe pruning utility for bt50_samples.db
 - Options: --db, --days, --vacuum, --yes
 
 Usage examples:
-  python tools/bt50_prune.py --db logs/bt50_samples.db --days 30 --dry-run
-  python tools/bt50_prune.py --db logs/bt50_samples.db --days 365 --yes --vacuum
+    python tools/bt50_prune.py --db db/bt50_samples.db --days 30 --dry-run
+    python tools/bt50_prune.py --db db/bt50_samples.db --days 365 --yes --vacuum
 
 """
 from __future__ import annotations
@@ -76,7 +76,7 @@ def prune(db_path: str, days: int, dry_run: bool, vacuum: bool) -> None:
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
-    p.add_argument("--db", default="logs/bt50_samples.db", help="Path to bt50 samples DB")
+    p.add_argument("--db", default="db/bt50_samples.db", help="Path to bt50 samples DB")
     p.add_argument("--days", type=int, default=30, help="Retention in days")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--vacuum", action="store_true")

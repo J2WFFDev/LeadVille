@@ -265,7 +265,7 @@ For technical support or questions:
 
 ## BT50 capture (tools/bt50_capture_db.py)
 
-The project includes a lightweight multi-sensor capture tool at `tools/bt50_capture_db.py` which discovers/connects to BT50/WTVB devices, parses raw frames using the project's parser, and persists records to a local SQLite database at `logs/bt50_samples.db`.
+ The project includes a lightweight multi-sensor capture tool at `tools/bt50_capture_db.py` which discovers/connects to BT50/WTVB devices, parses raw frames using the project's parser, and persists records to a local SQLite database at `db/bt50_samples.db`.
 
 Basic usage:
 
