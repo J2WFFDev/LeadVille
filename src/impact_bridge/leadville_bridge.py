@@ -264,6 +264,8 @@ class LeadVilleBridge:
             project_root = Path(__file__).parent.parent.parent
             db_path = project_root / "db" / "leadville.db"
             
+            self.logger.info(f"__file__: {__file__}")
+            self.logger.info(f"project_root: {project_root}")
             self.logger.info(f"Attempting to query database at: {db_path}")
             self.logger.info(f"Database file exists: {db_path.exists()}")
             
