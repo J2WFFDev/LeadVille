@@ -20,8 +20,9 @@ from bleak import BleakClient, BleakScanner
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Database imports for Bridge-assigned sensor lookup
-from impact_bridge.database.database import get_database_session
+from impact_bridge.database.database import get_database_session, init_database
 from impact_bridge.database.models import Bridge, Sensor
+from impact_bridge.config import DatabaseConfig
 import sqlite3
 from pathlib import Path
 
@@ -114,6 +115,20 @@ class LeadVilleBridge:
     
     def __init__(self):
         self.logger = logger
+        
+        # Initialize database for Bridge-assigned sensor lookups
+        try:
+            project_root = Path(__file__).parent.parent.parent
+            db_config = DatabaseConfig(
+                dir=str(project_root / "db"),
+                file="leadville.db",
+                enable_ingest=True,
+                echo=False
+            )
+            init_database(db_config)
+            self.logger.info("✓ Database initialized for Bridge assignments")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize database: {e}")
         
         self.amg_client = None
         self.bt50_client = None
