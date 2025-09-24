@@ -1,8 +1,376 @@
-<!-- Moved from project root into docs/dashboard for cleanup -->
-<!-- Original file preserved here for distribution and reference -->
-<html>
-  <head><title>Timer Dashboard Test (moved)</title></head>
-  <body>
-    <!-- content preserved from original timer_dashboard_test.html -->
-  </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille Timer Dashboard - Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .shot-excellent { @apply bg-green-100 text-green-800; }
+        .shot-good { @apply bg-blue-100 text-blue-800; }
+        .shot-fair { @apply bg-yellow-100 text-yellow-800; }
+        .shot-slow { @apply bg-red-100 text-red-800; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <div class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
+                            <span class="text-white font-bold">🎯</span>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">LeadVille Timer Dashboard</h1>
+                            <p class="text-sm text-gray-500">Real-time shooting timer data</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <div id="wsStatus" class="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <span id="wsStatusText" class="text-sm text-gray-600">Disconnected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Timer Status -->
+            <div id="timerStatus" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <!-- Timer status cards will be populated here -->
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Current String -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h2 class="text-lg font-semibold text-gray-900">Current String</h2>
+                    </div>
+                    <div id="currentString" class="p-6">
+                        <div class="text-center py-8">
+                            <p class="text-gray-500">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leaderboard -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h2 class="text-lg font-semibold text-gray-900">Today's Best Times</h2>
+                    </div>
+                    <div id="leaderboard" class="p-6">
+                        <div class="text-center py-8">
+                            <p class="text-gray-500">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Events -->
+            <div class="mt-6 bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900">Recent Events</h2>
+                </div>
+                <div id="recentEvents" class="p-6">
+                    <div class="text-center py-8">
+                        <p class="text-gray-500">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        let ws = null;
+        let wsReconnectTimeout = null;
+
+        // State
+        let currentString = [];
+        let timerStatus = [];
+        let latestEvents = [];
+        let leaderboard = [];
+
+        // Helper functions
+        function formatTime(seconds) {
+            if (!seconds) return 'N/A';
+            return `${parseFloat(seconds).toFixed(2)}s`;
+        }
+
+        function getShotRatingClass(rating) {
+            switch (rating) {
+                case 'excellent': return 'shot-excellent';
+                case 'good': return 'shot-good';
+                case 'fair': return 'shot-fair';
+                case 'slow': return 'shot-slow';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        // WebSocket management
+        function connectWebSocket() {
+            const wsUrl = `ws://${window.location.hostname}:8001/ws`;
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                console.log('📡 WebSocket connected');
+                document.getElementById('wsStatus').className = 'w-3 h-3 bg-green-500 rounded-full';
+                document.getElementById('wsStatusText').textContent = 'Connected';
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const message = JSON.parse(event.data);
+                    handleWebSocketMessage(message);
+                } catch (error) {
+                    console.error('WebSocket message parse error:', error);
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log('📡 WebSocket disconnected');
+                document.getElementById('wsStatus').className = 'w-3 h-3 bg-red-500 rounded-full';
+                document.getElementById('wsStatusText').textContent = 'Disconnected';
+                
+                // Attempt reconnection
+                wsReconnectTimeout = setTimeout(connectWebSocket, 3000);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                document.getElementById('wsStatus').className = 'w-3 h-3 bg-red-500 rounded-full';
+                document.getElementById('wsStatusText').textContent = 'Error';
+            };
+        }
+
+        // Handle WebSocket messages
+        function handleWebSocketMessage(message) {
+            switch (message.type) {
+                case 'initial_data':
+                    currentString = message.data.current_string || [];
+                    timerStatus = message.data.timer_status || [];
+                    updateCurrentString();
+                    updateTimerStatus();
+                    break;
+                    
+                case 'timer_event':
+                    const event = message.data;
+                    latestEvents.unshift(event);
+                    latestEvents = latestEvents.slice(0, 10);
+                    
+                    if (event.event_type === 'SHOT') {
+                        currentString.push(event);
+                        currentString.sort((a, b) => a.shot_number - b.shot_number);
+                    } else if (event.event_type === 'START') {
+                        currentString = [];
+                    }
+                    
+                    updateCurrentString();
+                    updateRecentEvents();
+                    break;
+            }
+        }
+
+        // Update UI functions
+        function updateTimerStatus() {
+            const container = document.getElementById('timerStatus');
+            if (timerStatus.length === 0) {
+                container.innerHTML = '<div class="col-span-3 text-center py-8 text-gray-500">No timer devices found</div>';
+                return;
+            }
+
+            container.innerHTML = timerStatus.map(timer => {
+                const statusClass = timer.status === 'active' ? 'bg-green-100 text-green-800' :
+                                  timer.status === 'recent' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800';
+                return `
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600">Timer Device</p>
+                                <p class="text-lg font-semibold text-gray-900">${timer.timer_device}</p>
+                            </div>
+                            <div class="px-2 py-1 rounded-full text-xs font-medium ${statusClass}">
+                                ${timer.status}
+                            </div>
+                        </div>
+                        <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p class="text-gray-500">Total Events</p>
+                                <p class="font-semibold">${timer.total_events}</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500">Avg Split</p>
+                                <p class="font-semibold">${formatTime(timer.avg_split_time)}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateCurrentString() {
+            const container = document.getElementById('currentString');
+            
+            if (currentString.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="w-12 h-12 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center">⏱️</div>
+                        <p class="text-gray-500">No active string</p>
+                        <p class="text-sm text-gray-400">Waiting for timer start...</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="space-y-3">
+                    ${currentString.map((shot, index) => `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                                    ${shot.shot_number}
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900">Split: ${formatTime(shot.shot_time)}</p>
+                                    <p class="text-xs text-gray-500">Total: ${formatTime(shot.string_total_time)}</p>
+                                </div>
+                            </div>
+                            <div class="px-2 py-1 rounded-full text-xs font-medium ${getShotRatingClass(shot.shot_rating)}">
+                                ${shot.shot_rating}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function updateLeaderboard() {
+            const container = document.getElementById('leaderboard');
+            
+            if (leaderboard.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="w-12 h-12 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center">🏆</div>
+                        <p class="text-gray-500">No times recorded today</p>
+                        <p class="text-sm text-gray-400">Start shooting to see leaderboard</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="space-y-3">
+                    ${leaderboard.map((entry, index) => {
+                        const medalClass = index === 0 ? 'bg-yellow-500 text-white' :
+                                         index === 1 ? 'bg-gray-400 text-white' :
+                                         index === 2 ? 'bg-amber-600 text-white' :
+                                         'bg-gray-200 text-gray-600';
+                        return `
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${medalClass}">
+                                        ${index + 1}
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">${entry.timer_device}</p>
+                                        <p class="text-xs text-gray-500">${entry.strings_completed} strings</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-lg font-bold text-gray-900">${formatTime(entry.best_time)}</p>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function updateRecentEvents() {
+            const container = document.getElementById('recentEvents');
+            
+            if (latestEvents.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="w-12 h-12 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center">⚡</div>
+                        <p class="text-gray-500">No recent events</p>
+                        <p class="text-sm text-gray-400">Events will appear here in real-time</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="space-y-2">
+                    ${latestEvents.slice(0, 10).map(event => {
+                        const dotColor = event.event_type === 'START' ? 'bg-green-500' :
+                                       event.event_type === 'SHOT' ? 'bg-blue-500' :
+                                       event.event_type === 'STOP' ? 'bg-red-500' :
+                                       'bg-gray-500';
+                        return `
+                            <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-2 h-2 rounded-full ${dotColor}"></div>
+                                    <span class="text-sm font-medium text-gray-800">${event.event_type}</span>
+                                    ${event.shot_number ? `<span class="text-sm text-gray-600">Shot #${event.shot_number}</span>` : ''}
+                                    ${event.shot_time ? `<span class="text-sm text-gray-600">${formatTime(event.shot_time)}</span>` : ''}
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    ${new Date(event.event_time).toLocaleTimeString()}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        // Fetch initial data
+        async function fetchInitialData() {
+            try {
+                const [eventsRes, stringRes, statusRes, leaderRes] = await Promise.all([
+                    fetch(`http://${window.location.hostname}:8001/api/events/latest?limit=10`),
+                    fetch(`http://${window.location.hostname}:8001/api/string/current`),
+                    fetch(`http://${window.location.hostname}:8001/api/timer/status`),
+                    fetch(`http://${window.location.hostname}:8001/api/leaderboard`)
+                ]);
+                
+                if (eventsRes.ok) {
+                    latestEvents = await eventsRes.json();
+                    updateRecentEvents();
+                }
+                
+                if (stringRes.ok) {
+                    const stringData = await stringRes.json();
+                    currentString = stringData.shots || [];
+                    updateCurrentString();
+                }
+                
+                if (statusRes.ok) {
+                    timerStatus = await statusRes.json();
+                    updateTimerStatus();
+                }
+                
+                if (leaderRes.ok) {
+                    const leaderData = await leaderRes.json();
+                    leaderboard = leaderData.leaderboard || [];
+                    updateLeaderboard();
+                }
+            } catch (error) {
+                console.error('Error fetching initial data:', error);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchInitialData();
+            connectWebSocket();
+        });
+    </script>
+</body>
 </html>
