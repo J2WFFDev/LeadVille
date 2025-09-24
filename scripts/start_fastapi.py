@@ -21,10 +21,18 @@ def main():
 
     # Import and run uvicorn programmatically
     try:
+        import importlib
         import uvicorn
-        # Use module path to the FastAPI app
-        app_location = "src.impact_bridge.fastapi_backend:app"
-        uvicorn.run(app_location, host="0.0.0.0", port=8001, log_level="info")
+
+        # Import the module directly and get the app object. This avoids
+        # relying on uvicorn's import-from-string behavior which is brittle
+        # when systemd/PYTHONPATH differs from developer environments.
+        module_name = "src.impact_bridge.fastapi_backend"
+        mod = importlib.import_module(module_name)
+        app = getattr(mod, "app")
+
+        # Run uvicorn with the application object
+        uvicorn.run(app=app, host="0.0.0.0", port=8001, log_level="info")
     except Exception as e:
         print(f"Failed to start uvicorn: {e}")
         raise
