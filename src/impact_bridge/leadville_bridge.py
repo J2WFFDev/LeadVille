@@ -260,7 +260,16 @@ class LeadVilleBridge:
     def get_bridge_assigned_devices(self):
         """Get MAC addresses of devices assigned to this Bridge"""
         try:
-            with get_database_session() as session:
+            # Use the same config as bridge initialization
+            project_root = Path(__file__).parent.parent.parent
+            db_config = DatabaseConfig(
+                dir=str(project_root / "db"),
+                file="leadville.db",
+                enable_ingest=True,
+                echo=False
+            )
+            
+            with get_database_session(db_config) as session:
                 bridge = session.query(Bridge).first()
                 self.logger.info(f"Bridge query result: {bridge}")
                 if bridge:
