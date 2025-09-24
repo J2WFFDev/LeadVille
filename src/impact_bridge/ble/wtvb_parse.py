@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = Path(__file__).resolve().parents[2] / "logs" / "bt50_samples.db"
+DB_PATH = Path(__file__).resolve().parents[2] / "db" / "bt50_samples.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 

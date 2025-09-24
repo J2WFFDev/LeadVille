@@ -91,12 +91,11 @@ def get_shot_log(limit: int = 100):
         if env_db:
             candidates.append(Path(env_db))
         # Preferred project location
-        candidates.append(project_root / 'db' / 'bt50_samples.db')
-        # Explicit absolute project path (common on Pi)
-        candidates.append(Path('/home/jrwest/projects/LeadVille/db/bt50_samples.db'))
-        # Legacy locations
-        candidates.append(project_root / 'logs' / 'bt50_samples.db')
-        candidates.append(Path('/home/jrwest/logs/bt50_samples.db'))
+            # Preferred canonical location inside the project and explicit override via env var.
+            candidates.append(project_root / 'db' / 'bt50_samples.db')
+            # Also allow explicit override via CAPTURE_DB_PATH environment variable (checked above).
+        
+            # Legacy locations removed
 
         db_path = None
         # Try candidates in order and log what we check

@@ -541,21 +541,13 @@ class LeadVilleBridge:
         try:
             # Prefer the canonical project DB location `db/bt50_samples.db` (new layout).
             # Keep legacy fallbacks for older deployments that still use `logs/`.
+            # Prefer explicit env override, then use project db location
             project_db = Path(__file__).parent.parent.parent / 'db' / 'bt50_samples.db'
-            possible_paths = [
-                project_db,                                                         # project/db/bt50_samples.db (preferred)
-                Path(__file__).parent.parent.parent / 'logs' / 'bt50_samples.db',   # historical project/logs/
-                Path(__file__).parent.parent / 'logs' / 'bt50_samples.db',         # src/logs/ fallback
-                Path('/home/jrwest/projects/LeadVille/db/bt50_samples.db'),         # absolute project path on Pi
-                Path('/home/jrwest/logs/bt50_samples.db'),                         # legacy absolute logs
-            ]
-
-            # Find existing database or use preferred project_db as default
-            db_path = project_db
-            for path in possible_paths:
-                if path.exists():
-                    db_path = path
-                    break
+            env_db = os.environ.get('CAPTURE_DB_PATH')
+            if env_db:
+                db_path = Path(env_db)
+            else:
+                db_path = project_db
             db_path.parent.mkdir(parents=True, exist_ok=True)
             con = sqlite3.connect(str(db_path))
             cur = con.cursor()
