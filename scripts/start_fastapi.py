@@ -11,7 +11,10 @@ from pathlib import Path
 
 def main():
     project_root = Path(__file__).parent.parent
-    # Ensure src is on path for imports
+    # Ensure project root is on sys.path so 'src' is importable as a top-level package
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    # Also add src directory for direct imports if needed
     src_path = project_root / "src"
     if str(src_path) not in sys.path:
         sys.path.insert(0, str(src_path))
