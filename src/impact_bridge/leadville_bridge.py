@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Database imports for Bridge-assigned sensor lookup
 from impact_bridge.database.database import get_database_session, init_database
-from impact_bridge.database.models import Bridge, Sensor
+from impact_bridge.database.models import Bridge, Sensor, TargetConfig
 from impact_bridge.config import DatabaseConfig
 import sqlite3
 from pathlib import Path
@@ -262,6 +262,10 @@ class LeadVilleBridge:
         try:
             with get_database_session() as session:
                 bridge = session.query(Bridge).first()
+                self.logger.info(f"Bridge query result: {bridge}")
+                if bridge:
+                    self.logger.info(f"Bridge current_stage_id: {bridge.current_stage_id}")
+                
                 if not bridge or not bridge.current_stage_id:
                     self.logger.warning("No Bridge or stage assignment found - using default devices")
                     return {
@@ -269,16 +273,25 @@ class LeadVilleBridge:
                         'sensors': ["EA:18:3D:6D:BA:E5", "C2:1B:DB:F0:55:50"]  # Default BT50 sensors
                     }
                 
-                # Get sensors assigned to this Bridge's stage
-                target_config_ids = [target.id for target in bridge.current_stage.target_configs]
+                # Get target configs for this stage directly with SQL
+                from impact_bridge.database.models import TargetConfig
+                target_configs = session.query(TargetConfig).filter(
+                    TargetConfig.stage_config_id == bridge.current_stage_id
+                ).all()
+                
+                self.logger.info(f"Found {len(target_configs)} target configs for stage {bridge.current_stage_id}")
+                target_config_ids = [tc.id for tc in target_configs]
+                
                 if not target_config_ids:
-                    self.logger.warning(f"No targets found for stage {bridge.current_stage.name}")
+                    self.logger.warning(f"No targets found for stage {bridge.current_stage_id}")
                     return {'timer': None, 'sensors': []}
                 
                 assigned_sensors = session.query(Sensor).filter(
                     Sensor.target_config_id.in_(target_config_ids),
                     Sensor.bridge_id == bridge.id
                 ).all()
+                
+                self.logger.info(f"Found {len(assigned_sensors)} sensors assigned to bridge and stage")
                 
                 # Separate timer and impact sensors
                 timer_mac = None
