@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille Bridge - Debug Version</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-4xl mx-auto p-6">
+        <h1 class="text-3xl font-bold mb-6">🔍 Bridge Config Debug</h1>
+        
+        <!-- Debug Console -->
+        <div class="bg-black text-green-400 p-4 rounded-lg mb-6 h-64 overflow-y-auto font-mono text-sm">
+            <div id="debugLog">Debug console started...\n</div>
+        </div>
+        
+        <!-- API Test Buttons -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-bold mb-4">API Tests</h2>
+            <div class="space-x-4">
+                <button onclick="testLeaguesAPI()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    Test Leagues API
+                </button>
+                <button onclick="testStagesAPI()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                    Test SASP Stages
+                </button>
+                <button onclick="testDeviceAPI()" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+                    Test Device Discovery
+                </button>
+                <button onclick="clearLog()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">
+                    Clear Log
+                </button>
+            </div>
+        </div>
+
+        <!-- Working Dropdowns -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-bold mb-4">Fixed Dropdowns</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">League</label>
+                    <select id="leagueSelect" onchange="loadStagesFixed()" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">Loading leagues...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Stage</label>
+                    <select id="stageSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2" disabled>
+                        <option value="">Select a league first</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Results -->
+            <div id="results" class="mt-6 p-4 bg-gray-50 rounded-lg hidden">
+                <h3 class="font-semibold mb-2">Selected Configuration:</h3>
+                <div id="configDetails" class="text-sm"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let debugLog = document.getElementById('debugLog');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugLog.innerHTML += `[${timestamp}] ${message}\n`;
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
+        
+        function clearLog() {
+            debugLog.innerHTML = 'Debug console cleared...\n';
+        }
+        
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🚀 Page loaded, initializing...');
+            loadLeagues();
+        });
+
+        async function testLeaguesAPI() {
+            log('📡 Testing leagues API...');
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/admin/leagues`);
+                log(`📊 Response status: ${response.status} ${response.statusText}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Leagues loaded: ${JSON.stringify(data, null, 2)}`);
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ API Error: ${errorText}`);
+                }
+            } catch (error) {
+                log(`🚨 Network Error: ${error.message}`);
+            }
+        }
+        
+        async function testStagesAPI() {
+            log('🎯 Testing SASP stages API (league ID = 1)...');
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/admin/leagues/1/stages`);
+                log(`📊 Response status: ${response.status} ${response.statusText}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ SASP Stages: ${JSON.stringify(data, null, 2)}`);
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ Stages API Error: ${errorText}`);
+                }
+            } catch (error) {
+                log(`🚨 Network Error: ${error.message}`);
+            }
+        }
+        
+        async function testDeviceAPI() {
+            log('📡 Testing device discovery API...');
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/admin/devices/discover`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ duration: 5 })
+                });
+                log(`📊 Response status: ${response.status} ${response.statusText}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Device Discovery: ${JSON.stringify(data, null, 2)}`);
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ Device API Error: ${errorText}`);
+                }
+            } catch (error) {
+                log(`🚨 Network Error: ${error.message}`);
+            }
+        }
+
+        async function loadLeagues() {
+            log('🔄 Loading leagues...');
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/admin/leagues`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const select = document.getElementById('leagueSelect');
+                    select.innerHTML = '<option value="">Select a league...</option>';
+                    
+                    data.leagues.forEach(league => {
+                        select.innerHTML += `<option value="${league.id}">${league.name}</option>`;
+                        log(`➕ Added league: ${league.name} (ID: ${league.id})`);
+                    });
+                    log('✅ Leagues loaded successfully');
+                } else {
+                    log(`❌ Failed to load leagues: ${response.status}`);
+                }
+            } catch (error) {
+                log(`🚨 Error loading leagues: ${error.message}`);
+                document.getElementById('leagueSelect').innerHTML = '<option value="">Error loading leagues</option>';
+            }
+        }
+
+        async function loadStagesFixed() {
+            const leagueId = document.getElementById('leagueSelect').value;
+            const stageSelect = document.getElementById('stageSelect');
+            
+            if (!leagueId) {
+                stageSelect.innerHTML = '<option value="">Select a league first</option>';
+                stageSelect.disabled = true;
+                log('⚠️ No league selected');
+                return;
+            }
+
+            log(`🎯 Loading stages for league ID: ${leagueId}...`);
+            
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/admin/leagues/${leagueId}/stages`);
+                log(`📊 Stages API response: ${response.status} ${response.statusText}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`📋 Stages data: ${JSON.stringify(data, null, 2)}`);
+                    
+                    stageSelect.innerHTML = '<option value="">Select a stage...</option>';
+                    
+                    if (data.stages && data.stages.length > 0) {
+                        data.stages.forEach(stage => {
+                            stageSelect.innerHTML += `<option value="${stage.id}">${stage.name} (${stage.target_count || 0} targets)</option>`;
+                            log(`➕ Added stage: ${stage.name} (ID: ${stage.id})`);
+                        });
+                        stageSelect.disabled = false;
+                        log('✅ Stages loaded successfully');
+                    } else {
+                        stageSelect.innerHTML = '<option value="">No stages found</option>';
+                        log('⚠️ No stages found in response');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ Failed to load stages: ${errorText}`);
+                    stageSelect.innerHTML = '<option value="">Error loading stages</option>';
+                }
+            } catch (error) {
+                log(`🚨 Error loading stages: ${error.message}`);
+                stageSelect.innerHTML = '<option value="">Error loading stages</option>';
+            }
+        }
+    </script>
+</body>
+</html>

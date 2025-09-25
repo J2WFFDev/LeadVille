@@ -11,8 +11,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import logging
 
-from ..database.session import get_db_session
-from ..database.pool_models import (
+from .database.session import get_db_session
+from .database.pool_models import (
     DevicePool, ActiveSession, DeviceLease, DevicePoolEvent,
     DevicePoolStatus, SessionStatus
 )
@@ -45,7 +45,7 @@ async def get_pool_devices(
         
         # Filter out leased devices unless specifically requested
         if not include_leased:
-            query = query.filter(DevicePool.status != DevicePoolStatus.LEASED)
+            query = query.filter(DevicePool.status != "leased")
         
         devices = query.order_by(DevicePool.device_type, DevicePool.label).all()
         
@@ -58,17 +58,17 @@ async def get_pool_devices(
                     "label": device.label,
                     "vendor": device.vendor,
                     "model": device.model,
-                    "status": device.status.value,
+                    "status": device.status,
                     "last_seen": device.last_seen.isoformat() if device.last_seen else None,
                     "battery": device.battery,
                     "rssi": device.rssi,
                     "notes": device.notes,
-                    "is_available": device.status == DevicePoolStatus.AVAILABLE
+                    "is_available": device.status == "available"
                 }
                 for device in devices
             ],
             "total_count": len(devices),
-            "available_count": len([d for d in devices if d.status == DevicePoolStatus.AVAILABLE])
+            "available_count": len([d for d in devices if d.status == "available"])
         }
     except Exception as e:
         logger.error(f"Error getting pool devices: {e}")
@@ -100,7 +100,7 @@ async def add_device_to_pool(request: Request, db: Session = Depends(get_db_sess
             label=label,
             vendor=vendor,
             model=model,
-            status=DevicePoolStatus.AVAILABLE
+            status="available"
         )
         
         db.add(device)
@@ -122,7 +122,7 @@ async def add_device_to_pool(request: Request, db: Session = Depends(get_db_sess
                 "id": device.id,
                 "hw_addr": device.hw_addr,
                 "label": device.label,
-                "status": device.status.value
+                "status": device.status
             }
         }
     except Exception as e:
@@ -159,7 +159,7 @@ async def get_active_sessions(
                     "session_name": session.session_name,
                     "bridge_id": session.bridge_id,
                     "stage_id": session.stage_id,
-                    "status": session.status.value,
+                    "status": session.status,
                     "started_at": session.started_at.isoformat(),
                     "ended_at": session.ended_at.isoformat() if session.ended_at else None,
                     "last_activity": session.last_activity.isoformat(),
@@ -191,7 +191,7 @@ async def create_session(request: Request, db: Session = Depends(get_db_session)
             session_name=session_name,
             bridge_id=bridge_id,
             stage_id=stage_id,
-            status=SessionStatus.IDLE
+            status="idle"
         )
         
         db.add(session)
@@ -203,7 +203,7 @@ async def create_session(request: Request, db: Session = Depends(get_db_session)
             "session": {
                 "id": session.id,
                 "session_name": session.session_name,
-                "status": session.status.value
+                "status": session.status
             }
         }
     except Exception as e:
@@ -227,7 +227,7 @@ async def lease_device(session_id: int, request: Request, db: Session = Depends(
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         
-        if session.status == SessionStatus.ENDED:
+        if session.status == SessionStatus.ended:
             raise HTTPException(status_code=400, detail="Cannot lease devices to ended session")
         
         # Verify device exists and is available
@@ -235,8 +235,8 @@ async def lease_device(session_id: int, request: Request, db: Session = Depends(
         if not device:
             raise HTTPException(status_code=404, detail="Device not found")
         
-        if device.status != DevicePoolStatus.AVAILABLE:
-            raise HTTPException(status_code=400, detail=f"Device is not available (status: {device.status.value})")
+        if device.status != "available":
+            raise HTTPException(status_code=400, detail=f"Device is not available (status: {device.status})")
         
         # Check if device is already leased to another session
         existing_lease = db.query(DeviceLease).filter(
@@ -254,7 +254,7 @@ async def lease_device(session_id: int, request: Request, db: Session = Depends(
         )
         
         # Update device status
-        device.status = DevicePoolStatus.LEASED
+        device.status = "leased"
         
         # Update session activity
         session.last_activity = func.now()
@@ -308,7 +308,7 @@ async def release_device(session_id: int, device_id: int, db: Session = Depends(
         
         # Update device status back to available
         device = lease.device
-        device.status = DevicePoolStatus.AVAILABLE
+        device.status = "available"
         
         # Update session activity
         session = lease.session
@@ -343,7 +343,7 @@ async def end_session(session_id: int, db: Session = Depends(get_db_session)):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         
-        if session.status == SessionStatus.ENDED:
+        if session.status == SessionStatus.ended:
             raise HTTPException(status_code=400, detail="Session already ended")
         
         # Release all active leases
@@ -354,7 +354,7 @@ async def end_session(session_id: int, db: Session = Depends(get_db_session)):
         released_count = 0
         for lease in active_leases:
             lease.released_at = func.now()
-            lease.device.status = DevicePoolStatus.AVAILABLE
+            lease.device.status = "available"
             released_count += 1
             
             # Log release event
@@ -367,7 +367,7 @@ async def end_session(session_id: int, db: Session = Depends(get_db_session)):
             db.add(event)
         
         # End session
-        session.status = SessionStatus.ENDED
+        session.status = "ended"
         session.ended_at = func.now()
         
         db.commit()
@@ -397,7 +397,7 @@ async def get_session_devices(session_id: int, db: Session = Depends(get_db_sess
         return {
             "session_id": session_id,
             "session_name": session.session_name,
-            "session_status": session.status.value,
+            "session_status": session.status,
             "devices": [
                 {
                     "lease_id": lease.id,

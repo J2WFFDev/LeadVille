@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille Bridge - System Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'leadville': {
+                            'primary': '#2563eb',
+                            'success': '#10b981',
+                            'warning': '#f59e0b',
+                            'danger': '#ef4444'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <div class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-leadville-primary rounded-lg flex items-center justify-center">
+                            <span class="text-white font-bold text-lg">🎯</span>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">LeadVille Bridge Dashboard</h1>
+                            <p class="text-sm text-gray-500">System Status & Live Data</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div id="connectionStatus" class="flex items-center space-x-2">
+                            <div class="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                            <span class="text-sm text-gray-600">Connecting...</span>
+                        </div>
+                        <button onclick="refreshAll()" class="bg-leadville-primary text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- System Status Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">Backend</p>
+                            <p id="backendStatus" class="text-lg font-semibold text-yellow-600">Checking...</p>
+                        </div>
+                        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                            <span>🔧</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">Database</p>
+                            <p id="dbStatus" class="text-lg font-semibold text-leadville-success">Ready</p>
+                        </div>
+                        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                            <span>🗄️</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">WebSocket</p>
+                            <p id="wsStatus" class="text-lg font-semibold text-yellow-600">Connecting...</p>
+                        </div>
+                        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                            <span>🔌</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">Bridge Service</p>
+                            <p id="bridgeStatus" class="text-lg font-semibold text-leadville-success">Running</p>
+                        </div>
+                        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                            <span>🌉</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Tabs -->
+            <div class="bg-white rounded-lg shadow">
+                <!-- Tab Navigation -->
+                <div class="border-b border-gray-200">
+                    <nav class="flex space-x-8 px-6" aria-label="Tabs">
+                        <button onclick="showTab('status')" id="tab-status" class="tab-button py-4 px-1 border-b-2 border-leadville-primary font-medium text-sm text-leadville-primary">
+                            📊 System Status
+                        </button>
+                        <button onclick="showTab('config')" id="tab-config" class="tab-button py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                            🎯 Bridge Configuration
+                        </button>
+                        <button onclick="showTab('live')" id="tab-live" class="tab-button py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                            ⚡ Live Data
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Tab Content -->
+                <div class="p-6">
+                    <!-- System Status Tab -->
+                    <div id="content-status" class="tab-content">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Quick Access Links -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">🚀 Quick Access</h3>
+                                <div class="space-y-3">
+                                    <a href="http://192.168.1.124:5173/#/stage-setup" 
+                                       class="flex items-center justify-between p-3 bg-leadville-primary bg-opacity-10 rounded-lg hover:bg-opacity-20 transition-colors">
+                                        <div class="flex items-center space-x-3">
+                                            <span class="text-leadville-primary">🏟️</span>
+                                            <span class="text-sm font-medium text-gray-900">Stage Setup (Current)</span>
+                                        </div>
+                                        <span class="text-xs text-leadville-primary">→</span>
+                                    </a>
+                                    
+                                    <a href="http://192.168.1.124:5173/#/settings" 
+                                       class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                        <div class="flex items-center space-x-3">
+                                            <span class="text-gray-600">⚙️</span>
+                                            <span class="text-sm font-medium text-gray-900">Settings (Current)</span>
+                                        </div>
+                                        <span class="text-xs text-gray-600">→</span>
+                                    </a>
+                                    
+                                    <a href="http://192.168.1.124:5173/#/console" 
+                                       class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                        <div class="flex items-center space-x-3">
+                                            <span class="text-gray-600">🖥️</span>
+                                            <span class="text-sm font-medium text-gray-900">Console Logs</span>
+                                        </div>
+                                        <span class="text-xs text-gray-600">→</span>
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- API Health Details -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">🔌 API Status</h3>
+                                <div class="space-y-3">
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <span class="text-sm text-gray-600">Health Endpoint</span>
+                                        <span id="healthEndpoint" class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">✅ Active</span>
+                                    </div>
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <span class="text-sm text-gray-600">Shot Log API</span>
+                                        <span id="shotLogAPI" class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">✅ Active</span>
+                                    </div>
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <span class="text-sm text-gray-600">Admin APIs</span>
+                                        <span id="adminAPIs" class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">✅ Active</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Shot Data Preview -->
+                        <div class="mt-6">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">📈 Recent Shot Data</h3>
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div id="recentShots" class="text-sm text-gray-600">Loading recent shots...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bridge Configuration Tab (NEW UNIFIED PAGE) -->
+                    <div id="content-config" class="tab-content hidden">
+                        <div class="space-y-6">
+                            <div class="text-center py-8">
+                                <h3 class="text-xl font-semibold text-gray-900 mb-2">🎯 Unified Bridge Configuration</h3>
+                                <p class="text-gray-600 mb-6">One page to configure your bridge: Select stage → Discover devices → Assign sensors → Done!</p>
+                                
+                                <div class="bg-blue-50 rounded-lg p-6 max-w-2xl mx-auto">
+                                    <div class="text-left">
+                                        <h4 class="font-semibold text-blue-900 mb-3">🚧 Coming Soon - Unified Workflow:</h4>
+                                        <ol class="text-sm text-blue-800 space-y-2">
+                                            <li><strong>1.</strong> Select Stage (SASP Exclamation, Steel Challenge 5 to Go, etc.)</li>
+                                            <li><strong>2.</strong> Discover BLE Devices (Timer + Impact Sensors)</li>
+                                            <li><strong>3.</strong> Assign Timer to Selected Stage</li>
+                                            <li><strong>4.</strong> Drag & Drop Sensors to Stage Targets (T1, T2, T3, T4, T5)</li>
+                                            <li><strong>5.</strong> Bridge automatically configured and ready!</li>
+                                        </ol>
+                                    </div>
+                                </div>
+
+                                <div class="mt-6 flex justify-center space-x-4">
+                                    <a href="http://192.168.1.124:5173/#/stage-setup" 
+                                       class="bg-leadville-primary text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                                        🏟️ Use Current Stage Setup
+                                    </a>
+                                    <a href="http://192.168.1.124:5173/#/settings" 
+                                       class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors">
+                                        📡 Use Current Device Settings
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Data Tab -->
+                    <div id="content-live" class="tab-content hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Current String -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">🎯 Current String</h3>
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <div id="currentString" class="text-sm text-gray-600">
+                                        <div class="flex items-center space-x-2 mb-2">
+                                            <span class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                                            <span>Waiting for timer connection...</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500">Connect timer device to see live data</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Recent Events -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">⚡ Recent Events</h3>
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <div id="recentEvents" class="text-sm text-gray-600">Loading events...</div>
+                                </div>
+                            </div>
+
+                            <!-- Today's Best Times -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">🏆 Today's Best Times</h3>
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <div id="bestTimes" class="text-sm text-gray-600">Loading times...</div>
+                                </div>
+                            </div>
+
+                            <!-- System Health -->
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 mb-4">💊 System Health</h3>
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <div id="systemHealth" class="text-sm text-gray-600">Checking system health...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-white border-t mt-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="flex justify-between items-center text-sm text-gray-500">
+                    <div>
+                        LeadVille Impact Bridge © 2024 • Enhanced System Dashboard
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span id="lastUpdate">Last update: Never</span>
+                        <span id="overallStatus" class="text-leadville-success">✅ System Ready</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab Management
+        function showTab(tabName) {
+            // Hide all tab content
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-button').forEach(el => {
+                el.classList.remove('border-leadville-primary', 'text-leadville-primary');
+                el.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            // Show selected tab
+            document.getElementById(`content-${tabName}`).classList.remove('hidden');
+            const activeTab = document.getElementById(`tab-${tabName}`);
+            activeTab.classList.remove('border-transparent', 'text-gray-500');
+            activeTab.classList.add('border-leadville-primary', 'text-leadville-primary');
+        }
+
+        // WebSocket connection
+        let ws = null;
+        let wsConnected = false;
+
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket(`ws://${window.location.hostname}:8001/ws/live`);
+                
+                ws.onopen = function() {
+                    wsConnected = true;
+                    updateStatus('wsStatus', 'Connected', 'leadville-success');
+                    updateConnectionIndicator(true);
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (e) {
+                        console.log('WebSocket message:', event.data);
+                    }
+                };
+                
+                ws.onclose = function() {
+                    wsConnected = false;
+                    updateStatus('wsStatus', 'Disconnected', 'leadville-danger');
+                    updateConnectionIndicator(false);
+                    // Retry connection
+                    setTimeout(connectWebSocket, 5000);
+                };
+            } catch (error) {
+                updateStatus('wsStatus', 'Error', 'leadville-danger');
+                setTimeout(connectWebSocket, 5000);
+            }
+        }
+
+        function handleWebSocketMessage(data) {
+            if (data.type === 'shot_event') {
+                updateCurrentString(data);
+            } else if (data.type === 'timer_event') {
+                updateRecentEvents(data);
+            }
+        }
+
+        function updateConnectionIndicator(connected) {
+            const indicator = document.getElementById('connectionStatus');
+            if (connected) {
+                indicator.innerHTML = `
+                    <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span class="text-sm text-gray-600">Connected</span>
+                `;
+            } else {
+                indicator.innerHTML = `
+                    <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                    <span class="text-sm text-gray-600">Disconnected</span>
+                `;
+            }
+        }
+
+        function updateStatus(elementId, status, colorClass) {
+            const element = document.getElementById(elementId);
+            element.textContent = status;
+            element.className = `text-lg font-semibold text-${colorClass}`;
+        }
+
+        // API Status Checking
+        async function checkBackendStatus() {
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/health`);
+                if (response.ok) {
+                    updateStatus('backendStatus', 'Healthy', 'leadville-success');
+                } else {
+                    updateStatus('backendStatus', 'Error', 'leadville-danger');
+                }
+            } catch (error) {
+                updateStatus('backendStatus', 'Offline', 'leadville-danger');
+            }
+        }
+
+        async function loadRecentShots() {
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/shot-log?limit=5`);
+                if (response.ok) {
+                    const data = await response.json();
+                    displayRecentShots(data.logs);
+                }
+            } catch (error) {
+                document.getElementById('recentShots').textContent = 'Error loading shot data';
+            }
+        }
+
+        function displayRecentShots(shots) {
+            const container = document.getElementById('recentShots');
+            if (shots.length === 0) {
+                container.textContent = 'No recent shots found';
+                return;
+            }
+
+            container.innerHTML = shots.map(shot => `
+                <div class="flex items-center justify-between py-2 border-b border-gray-200 last:border-b-0">
+                    <div>
+                        <span class="font-medium">${shot.message}</span>
+                        <span class="text-xs text-gray-500 ml-2">${shot.timestamp}</span>
+                    </div>
+                    <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">${shot.event_type}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateCurrentString(data) {
+            const element = document.getElementById('currentString');
+            element.innerHTML = `
+                <div class="flex items-center space-x-2 mb-2">
+                    <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                    <span class="font-medium">Shot #${data.shot_number || 'Unknown'}</span>
+                </div>
+                <p class="text-sm">Time: ${data.total_time || 'N/A'}s</p>
+            `;
+        }
+
+        function updateRecentEvents(data) {
+            const element = document.getElementById('recentEvents');
+            const timestamp = new Date().toLocaleTimeString();
+            element.innerHTML = `
+                <div class="py-2 border-b border-gray-200">
+                    <span class="font-medium">${data.event_type}</span>
+                    <span class="text-xs text-gray-500 ml-2">${timestamp}</span>
+                </div>
+            ` + element.innerHTML;
+        }
+
+        function refreshAll() {
+            checkBackendStatus();
+            loadRecentShots();
+            document.getElementById('lastUpdate').textContent = `Last update: ${new Date().toLocaleTimeString()}`;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkBackendStatus();
+            connectWebSocket();
+            loadRecentShots();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(refreshAll, 30000);
+        });
+    </script>
+</body>
+</html>

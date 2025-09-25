@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille Bridge - Unified Configuration</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.0/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <div class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                            <span class="text-white font-bold text-lg">🎯</span>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">Bridge Configuration</h1>
+                            <p class="text-sm text-gray-500">One page setup: Stage → Devices → Assignment → Done!</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="window.location.reload()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Progress Steps -->
+            <div class="mb-8">
+                <div class="flex items-center justify-center">
+                    <div class="flex items-center space-x-8">
+                        <div class="flex items-center">
+                            <div id="step1-circle" class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">1</div>
+                            <span class="ml-2 text-sm font-medium text-gray-900">Select Stage</span>
+                        </div>
+                        <div class="w-16 h-1 bg-gray-300"></div>
+                        <div class="flex items-center">
+                            <div id="step2-circle" class="w-10 h-10 bg-gray-300 text-gray-600 rounded-full flex items-center justify-center font-bold">2</div>
+                            <span class="ml-2 text-sm font-medium text-gray-600">Discover Devices</span>
+                        </div>
+                        <div class="w-16 h-1 bg-gray-300"></div>
+                        <div class="flex items-center">
+                            <div id="step3-circle" class="w-10 h-10 bg-gray-300 text-gray-600 rounded-full flex items-center justify-center font-bold">3</div>
+                            <span class="ml-2 text-sm font-medium text-gray-600">Assign Devices</span>
+                        </div>
+                        <div class="w-16 h-1 bg-gray-300"></div>
+                        <div class="flex items-center">
+                            <div id="step4-circle" class="w-10 h-10 bg-gray-300 text-gray-600 rounded-full flex items-center justify-center font-bold">✓</div>
+                            <span class="ml-2 text-sm font-medium text-gray-600">Complete</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 1: Stage Selection -->
+            <div id="step1" class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">🏟️ Step 1: Select Competition Stage</h2>
+                <p class="text-gray-600 mb-6">Choose the stage this bridge will manage. The bridge will handle timing and impact detection for all targets in this stage.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">League</label>
+                        <select id="leagueSelect" onchange="loadStages()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Loading leagues...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Stage</label>
+                        <select id="stageSelect" onchange="selectStage()" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" disabled>
+                            <option value="">Select a league first</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Selected Stage Preview -->
+                <div id="stagePreview" class="hidden mt-6 p-4 bg-blue-50 rounded-lg">
+                    <h3 class="font-semibold text-blue-900 mb-2">Selected Stage:</h3>
+                    <div id="stageDetails" class="text-sm text-blue-800"></div>
+                    <button onclick="nextStep(2)" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        Continue to Device Discovery →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Device Discovery -->
+            <div id="step2" class="hidden bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">📡 Step 2: Discover BLE Devices</h2>
+                <p class="text-gray-600 mb-6">Discover your timer and impact sensors. Make sure all devices are powered on and in range.</p>
+                
+                <div class="flex items-center space-x-4 mb-6">
+                    <button onclick="discoverDevices()" id="discoverBtn" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm">
+                        🔍 Discover Devices
+                    </button>
+                    <div id="discoveryStatus" class="text-sm text-gray-600 font-medium"></div>
+                </div>
+
+                <!-- Real-time Discovery Progress -->
+                <div id="discoveryProgress" class="hidden mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h3 class="font-semibold text-blue-900 mb-2">Scanning for devices...</h3>
+                    <div id="liveDevices" class="space-y-2">
+                        <!-- Devices appear here as discovered -->
+                    </div>
+                </div>
+
+                <!-- Discovered Devices with Selection -->
+                <div id="discoveredDevices" class="mb-6">
+                    <!-- Final device list with checkboxes -->
+                </div>
+
+                <div id="devicesFound" class="hidden">
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200 mb-4">
+                        <h3 class="font-semibold text-green-900 mb-2">Device Selection</h3>
+                        <p class="text-sm text-green-800 mb-3">Select the devices you want to use for this bridge configuration:</p>
+                        <button onclick="selectAllDevices()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                            ✅ Select All Devices
+                        </button>
+                    </div>
+                    <div class="text-center">
+                        <button onclick="proceedToAssignment()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-semibold">
+                            Continue to Assignment →
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Device Assignment -->
+            <div id="step3" class="hidden bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">🎯 Step 3: Assign Devices to Targets</h2>
+                <p class="text-gray-600 mb-6">Drag and drop your timer and sensors to the appropriate stage targets.</p>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Selected Devices -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Selected Devices</h3>
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div id="availableDevices" class="space-y-3">
+                                <!-- Selected devices will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stage Targets -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Stage Targets</h3>
+                        <div id="stageTargets" class="space-y-3 mb-6">
+                            <!-- Targets will be populated here -->
+                        </div>
+
+                        <!-- Timer Assignment -->
+                        <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                            <h4 class="font-semibold text-yellow-900 mb-2">Timer Assignment</h4>
+                            <div id="timerSlot" class="min-h-16 border-2 border-dashed border-yellow-300 rounded-lg p-3 text-center text-yellow-700 cursor-pointer hover:bg-yellow-100"
+                                 ondrop="drop(event)" ondragover="allowDrop(event)">
+                                Drop timer device here
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="assignmentComplete" class="hidden mt-6">
+                    <button onclick="completeBridgeSetup()" class="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 transition-colors text-lg font-semibold">
+                        ✅ Complete Bridge Setup
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Completion -->
+            <div id="step4" class="hidden bg-white rounded-lg shadow p-6">
+                <div class="text-center py-8">
+                    <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">✅</span>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Bridge Configuration Complete!</h2>
+                    <p class="text-gray-600 mb-6">Your bridge has been successfully configured and is ready for competition.</p>
+                    
+                    <div id="configSummary" class="bg-green-50 rounded-lg p-6 max-w-2xl mx-auto mb-6">
+                        <!-- Configuration summary will be populated here -->
+                    </div>
+
+                    <div class="flex justify-center space-x-4">
+                        <button onclick="testBridge()" class="bg-leadville-primary text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                            🧪 Test Bridge Connection
+                        </button>
+                        <a href="http://192.168.1.124:8080/enhanced_system_dashboard.html" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">
+                            📊 View System Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Back to Current Pages (Temporary) -->
+            <div class="bg-yellow-50 rounded-lg p-6 border-l-4 border-yellow-400">
+                <h3 class="font-semibold text-yellow-800 mb-2">🚧 Development Note</h3>
+                <p class="text-yellow-700 mb-4">This unified configuration page is in development. For now, use the existing separate pages:</p>
+                <div class="flex space-x-4">
+                    <a href="http://192.168.1.124:5173/#/stage-setup" class="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors">
+                        🏟️ Stage Setup
+                    </a>
+                    <a href="http://192.168.1.124:5173/#/settings" class="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors">
+                        📡 Device Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedStage = null;
+        let discoveredDevices = [];
+        let selectedDevices = [];
+        let currentStep = 1;
+        let assignedDevices = {};
+        let discoveryInterval = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLeagues();
+        });
+
+        async function loadLeagues() {
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/admin/leagues`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const select = document.getElementById('leagueSelect');
+                    select.innerHTML = '<option value="">Select a league...</option>';
+                    data.leagues.forEach(league => {
+                        select.innerHTML += `<option value="${league.id}">${league.name}</option>`;
+                    });
+                }
+            } catch (error) {
+                document.getElementById('leagueSelect').innerHTML = '<option value="">Error loading leagues</option>';
+            }
+        }
+
+        async function loadStages() {
+            const leagueId = document.getElementById('leagueSelect').value;
+            const stageSelect = document.getElementById('stageSelect');
+            
+            if (!leagueId) {
+                stageSelect.innerHTML = '<option value="">Select a league first</option>';
+                stageSelect.disabled = true;
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/admin/leagues/${leagueId}/stages`);
+                if (response.ok) {
+                    const data = await response.json();
+                    stageSelect.innerHTML = '<option value="">Select a stage...</option>';
+                    if (data.stages) {
+                        data.stages.forEach(stage => {
+                            stageSelect.innerHTML += `<option value="${stage.id}">${stage.name} (${stage.target_count} targets)</option>`;
+                        });
+                    }
+                    stageSelect.disabled = false;
+                }
+            } catch (error) {
+                stageSelect.innerHTML = '<option value="">Error loading stages</option>';
+            }
+        }
+
+        async function selectStage() {
+            const stageId = document.getElementById('stageSelect').value;
+            if (!stageId) {
+                document.getElementById('stagePreview').classList.add('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8001/api/admin/stages/${stageId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    selectedStage = data.stage;
+                    displayStagePreview(selectedStage);
+                }
+            } catch (error) {
+                console.error('Error loading stage details:', error);
+            }
+        }
+
+        function displayStagePreview(stage) {
+            document.getElementById('stageDetails').innerHTML = `
+                <p><strong>${stage.league.name} - ${stage.name}</strong></p>
+                <p>${stage.targets.length} targets: ${stage.targets.map(t => `T${t.target_number} (${t.type})`).join(', ')}</p>
+            `;
+            document.getElementById('stagePreview').classList.remove('hidden');
+        }
+
+        function nextStep(step) {
+            // Hide current step
+            document.getElementById(`step${currentStep}`).classList.add('hidden');
+            
+            // Update progress
+            document.getElementById(`step${currentStep}-circle`).classList.remove('bg-blue-600', 'text-white');
+            document.getElementById(`step${currentStep}-circle`).classList.add('bg-green-500', 'text-white');
+            document.getElementById(`step${step}-circle`).classList.remove('bg-gray-300', 'text-gray-600');
+            document.getElementById(`step${step}-circle`).classList.add('bg-blue-600', 'text-white');
+            
+            // Show new step
+            document.getElementById(`step${step}`).classList.remove('hidden');
+            currentStep = step;
+
+            // Setup step-specific content
+            if (step === 3) {
+                setupAssignmentStep();
+            }
+        }
+
+        async function discoverDevices() {
+            const btn = document.getElementById('discoverBtn');
+            const status = document.getElementById('discoveryStatus');
+            const progressContainer = document.getElementById('discoveryProgress');
+            const liveDevices = document.getElementById('liveDevices');
+            
+            btn.disabled = true;
+            btn.textContent = '🔍 Discovering...';
+            status.textContent = 'Starting device scan...';
+            progressContainer.classList.remove('hidden');
+            discoveredDevices = [];
+            liveDevices.innerHTML = '';
+
+            try {
+                // Start the discovery API call
+                const response = await fetch(`http://${window.location.hostname}:8001/api/admin/devices/discover`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ duration: 10 })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    discoveredDevices = data.discovered_devices || [];
+                    
+                    // Show final results
+                    status.textContent = `Discovery complete - Found ${discoveredDevices.length} devices`;
+                    displayDiscoveredDevices();
+                    
+                    if (discoveredDevices.length > 0) {
+                        document.getElementById('devicesFound').classList.remove('hidden');
+                    }
+                    
+                    // Hide progress after 2 seconds
+                    setTimeout(() => {
+                        progressContainer.classList.add('hidden');
+                    }, 2000);
+                } else {
+                    status.textContent = 'Discovery failed';
+                }
+            } catch (error) {
+                status.textContent = 'Error during discovery';
+            }
+
+            btn.disabled = false;
+            btn.textContent = '🔍 Discover Devices';
+        }
+
+        function displayDiscoveredDevices() {
+            const container = document.getElementById('discoveredDevices');
+            container.innerHTML = '';
+
+            if (discoveredDevices.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-4">No devices found. Make sure devices are powered on and in range.</p>';
+                return;
+            }
+
+            discoveredDevices.forEach((device, index) => {
+                const deviceType = device.type === 'timer' ? 'Timer' : 'Impact Sensor';
+                const icon = deviceType === 'Timer' ? '⏱️' : '📡';
+                
+                container.innerHTML += `
+                    <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4 shadow-sm">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-2xl">${icon}</span>
+                                <div>
+                                    <h3 class="font-semibold text-gray-900">${deviceType}</h3>
+                                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Found</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <input type="checkbox" id="device-${index}" class="device-checkbox" 
+                                       onchange="toggleDeviceSelection(${index})">
+                                <label for="device-${index}" class="text-sm bg-blue-600 text-white px-3 py-1 rounded cursor-pointer">
+                                    Select
+                                </label>
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-600 space-y-1">
+                            <p><strong>MAC:</strong> ${device.address}</p>
+                            <p><strong>Signal:</strong> ${device.rssi || 'N/A'} dBm</p>
+                            <p><strong>Name:</strong> ${device.name}</p>
+                            <p><strong>Vendor:</strong> ${device.vendor}</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function toggleDeviceSelection(index) {
+            const device = discoveredDevices[index];
+            const checkbox = document.getElementById(`device-${index}`);
+            
+            if (checkbox.checked) {
+                if (!selectedDevices.find(d => d.address === device.address)) {
+                    selectedDevices.push(device);
+                }
+            } else {
+                selectedDevices = selectedDevices.filter(d => d.address !== device.address);
+            }
+        }
+
+        function selectAllDevices() {
+            selectedDevices = [...discoveredDevices];
+            document.querySelectorAll('.device-checkbox').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        }
+
+        function proceedToAssignment() {
+            if (selectedDevices.length === 0) {
+                alert('Please select at least one device before proceeding.');
+                return;
+            }
+            nextStep(3);
+        }
+
+        function setupAssignmentStep() {
+            // Populate selected devices
+            const availableContainer = document.getElementById('availableDevices');
+            availableContainer.innerHTML = '';
+
+            if (selectedDevices.length === 0) {
+                availableContainer.innerHTML = '<p class="text-gray-500 text-center py-4">No devices selected</p>';
+                return;
+            }
+
+            selectedDevices.forEach(device => {
+                const deviceType = device.type === 'timer' ? 'Timer' : 'Impact Sensor';
+                const icon = deviceType === 'Timer' ? '⏱️' : '📡';
+                
+                availableContainer.innerHTML += `
+                    <div class="bg-white border border-gray-300 rounded-lg p-3 cursor-move shadow-sm hover:shadow-md" 
+                         draggable="true" ondragstart="drag(event)" data-device="${device.address}" data-type="${device.type}">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xl">${icon}</span>
+                            <div>
+                                <p class="font-semibold">${deviceType}</p>
+                                <p class="text-xs text-gray-600">${device.address}</p>
+                                <p class="text-xs text-gray-500">${device.name}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Populate stage targets
+            if (selectedStage && selectedStage.targets) {
+                const targetsContainer = document.getElementById('stageTargets');
+                targetsContainer.innerHTML = '';
+
+                selectedStage.targets.forEach(target => {
+                    targetsContainer.innerHTML += `
+                        <div class="bg-white border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-green-400 hover:bg-green-50"
+                             ondrop="drop(event)" ondragover="allowDrop(event)" data-target="${target.id}">
+                            <p class="font-semibold">Target ${target.target_number}</p>
+                            <p class="text-sm text-gray-600">${target.shape} ${target.type}</p>
+                            <p class="text-xs text-gray-500">${target.distance_feet}ft, ${target.height_feet}ft</p>
+                            <div id="assigned-${target.id}" class="mt-2 text-xs text-green-700"></div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function allowDrop(ev) {
+            ev.preventDefault();
+        }
+
+        function drag(ev) {
+            ev.dataTransfer.setData("device", ev.target.dataset.device);
+            ev.dataTransfer.setData("type", ev.target.dataset.type);
+        }
+
+        function drop(ev) {
+            ev.preventDefault();
+            const deviceAddress = ev.dataTransfer.getData("device");
+            const deviceType = ev.dataTransfer.getData("type");
+            const targetElement = ev.currentTarget;
+            
+            if (targetElement.id === 'timerSlot' && deviceType === 'timer') {
+                targetElement.innerHTML = `<div class="text-green-700 font-semibold">✅ Timer Assigned: ${deviceAddress}</div>`;
+                assignedDevices.timer = deviceAddress;
+            } else if (targetElement.dataset.target && deviceType === 'accelerometer') {
+                const targetId = targetElement.dataset.target;
+                const assignedDiv = document.getElementById(`assigned-${targetId}`);
+                assignedDiv.innerHTML = `✅ Sensor: ${deviceAddress}`;
+                assignedDevices[`target-${targetId}`] = deviceAddress;
+            }
+            
+            checkAssignmentComplete();
+        }
+
+        function checkAssignmentComplete() {
+            const hasTimer = assignedDevices.timer;
+            const sensorCount = Object.keys(assignedDevices).filter(key => key.startsWith('target-')).length;
+            
+            if (hasTimer && sensorCount > 0) {
+                document.getElementById('assignmentComplete').classList.remove('hidden');
+            }
+        }
+
+        function completeBridgeSetup() {
+            nextStep(4);
+            displayConfigSummary();
+        }
+
+        function displayConfigSummary() {
+            const summary = document.getElementById('configSummary');
+            const sensorCount = Object.keys(assignedDevices).filter(key => key.startsWith('target-')).length;
+            
+            summary.innerHTML = `
+                <h3 class="font-semibold text-green-900 mb-3">Configuration Summary:</h3>
+                <div class="text-left text-sm text-green-800">
+                    <p><strong>Stage:</strong> ${selectedStage ? `${selectedStage.league.name} - ${selectedStage.name}` : 'Test Stage'}</p>
+                    <p><strong>Targets:</strong> ${selectedStage ? selectedStage.targets.length : 5} configured</p>
+                    <p><strong>Timer:</strong> ${assignedDevices.timer || 'Not assigned'}</p>
+                    <p><strong>Sensors:</strong> ${sensorCount} impact sensors assigned</p>
+                    <p><strong>Status:</strong> Ready for competition</p>
+                </div>
+            `;
+        }
+
+        async function testBridge() {
+            alert('Bridge test functionality will be implemented. This will verify timer and sensor connectivity.');
+        }
+    </script>
+</body>
+</html>

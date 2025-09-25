@@ -58,8 +58,13 @@ app.add_middleware(
 )
 
 # Include device pool management routes
-from src.impact_bridge.pool_api import router as pool_router
-app.include_router(pool_router)
+try:
+    from src.impact_bridge.pool_api import router as pool_router
+    app.include_router(pool_router)
+    logger.info("✅ Device Pool Management API routes included")
+except Exception as e:
+    logger.error(f"❌ Failed to include Device Pool API routes: {e}")
+    # Continue without pool routes for now
 
 # Mount static files for dashboard pages
 try:
@@ -604,7 +609,13 @@ async def pair_device(request: Request):
 
 @app.post("/api/admin/devices/{sensor_id}/assign")
 async def assign_device_to_target(sensor_id: int, request: Request):
-    """Assign a device to a target"""
+    """
+    [DEPRECATED] Assign a device to a target
+    
+    This endpoint is deprecated. Use the Device Pool system instead:
+    - POST /api/admin/pool/sessions/{session_id}/lease
+    """
+    logger.warning("DEPRECATED: /api/admin/devices/{sensor_id}/assign endpoint called. Use Device Pool system instead.")
     try:
         data = await request.json()
         target_id = data.get("target_id")
@@ -633,7 +644,13 @@ async def assign_device_to_target(sensor_id: int, request: Request):
 
 @app.post("/api/admin/devices/{sensor_id}/unassign")
 async def unassign_device(sensor_id: int):
-    """Remove device assignment from target"""
+    """
+    [DEPRECATED] Remove device assignment from target
+    
+    This endpoint is deprecated. Use the Device Pool system instead:
+    - POST /api/admin/pool/sessions/{session_id}/release/{device_id}
+    """
+    logger.warning("DEPRECATED: /api/admin/devices/{sensor_id}/unassign endpoint called. Use Device Pool system instead.")
     try:
         from src.impact_bridge.device_manager import device_manager
         result = await device_manager.unassign_device(sensor_id)
@@ -697,7 +714,13 @@ async def remove_device(sensor_id: int):
 
 @app.get("/api/admin/devices/assignments")
 def get_device_assignments():
-    """Get current device-to-target assignments"""
+    """
+    [DEPRECATED] Get current device-to-target assignments
+    
+    This endpoint is deprecated. Use the Device Pool system instead:
+    - GET /api/admin/pool/sessions/{session_id}/devices
+    """
+    logger.warning("DEPRECATED: /api/admin/devices/assignments endpoint called. Use Device Pool system instead.")
     try:
         from src.impact_bridge.device_manager import device_manager
         assignments = device_manager.get_device_assignments()
@@ -944,6 +967,14 @@ def get_stage_details(stage_id: int):
 
 @app.post("/api/admin/stages/{stage_id}/assign_sensor")
 def assign_sensor_to_target(stage_id: int, request: dict):
+    """
+    [DEPRECATED] Assign a sensor to a target within a stage
+    
+    This endpoint is deprecated. Use the Device Pool system instead:
+    - POST /api/admin/pool/sessions to create a session
+    - POST /api/admin/pool/sessions/{session_id}/lease to lease devices
+    """
+    logger.warning("DEPRECATED: /api/admin/stages/{stage_id}/assign_sensor endpoint called. Use Device Pool system instead.")
     """Assign a sensor to a specific target in a stage"""
     try:
         from .database.models import StageConfig, TargetConfig, Sensor
@@ -1020,6 +1051,13 @@ def assign_sensor_to_target(stage_id: int, request: dict):
 
 @app.post("/api/admin/stages/{stage_id}/unassign_sensor")
 def unassign_sensor_from_target(stage_id: int, request: dict):
+    """
+    [DEPRECATED] Remove sensor assignment from a target within a stage
+    
+    This endpoint is deprecated. Use the Device Pool system instead:
+    - POST /api/admin/pool/sessions/{session_id}/release/{device_id}
+    """
+    logger.warning("DEPRECATED: /api/admin/stages/{stage_id}/unassign_sensor endpoint called. Use Device Pool system instead.")
     """Remove sensor assignment from a target"""
     try:
         from .database.models import TargetConfig, Sensor

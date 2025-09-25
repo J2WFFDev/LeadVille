@@ -3,7 +3,7 @@ Device Pool Management Models
 Implements temporary device assignment system for shared BLE device resources.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, CheckConstraint, Index, Text, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, CheckConstraint, Index, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -13,16 +13,16 @@ Base = declarative_base()
 
 class DevicePoolStatus(enum.Enum):
     """Device availability status in the pool"""
-    AVAILABLE = "available"      # Device is in pool and can be leased
-    LEASED = "leased"           # Device is currently leased to a session
-    OFFLINE = "offline"         # Device is not responding/unavailable
-    MAINTENANCE = "maintenance"  # Device is removed for maintenance
+    available = "available"      # Device is in pool and can be leased
+    leased = "leased"           # Device is currently leased to a session
+    offline = "offline"         # Device is not responding/unavailable
+    maintenance = "maintenance"  # Device is removed for maintenance
 
 class SessionStatus(enum.Enum):
     """Active session status"""
-    ACTIVE = "active"           # Session is running with devices connected
-    IDLE = "idle"              # Session exists but devices not connected
-    ENDED = "ended"            # Session completed, devices should be released
+    active = "active"           # Session is running with devices connected
+    idle = "idle"              # Session exists but devices not connected
+    ended = "ended"            # Session completed, devices should be released
 
 class DevicePool(Base):
     """Shared pool of BLE devices available for temporary assignment"""
@@ -34,7 +34,7 @@ class DevicePool(Base):
     label = Column(String(100), nullable=False)
     vendor = Column(String(50), nullable=True)  # 'WitMotion', 'AMG', etc.
     model = Column(String(50), nullable=True)   # 'BT50', 'AMGTimer', etc.
-    status = Column(Enum(DevicePoolStatus), nullable=False, default=DevicePoolStatus.AVAILABLE)
+    status = Column(String(20), nullable=False, default="available")  # Use string instead of enum temporarily
     last_seen = Column(DateTime, nullable=True)
     battery = Column(Integer, nullable=True)  # Battery percentage
     rssi = Column(Integer, nullable=True)     # Signal strength
@@ -61,9 +61,9 @@ class ActiveSession(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     session_name = Column(String(100), nullable=False)  # Human-readable session name
-    bridge_id = Column(Integer, ForeignKey('bridges.id'), nullable=False)
-    stage_id = Column(Integer, ForeignKey('stages.id'), nullable=True)  # Associated stage
-    status = Column(Enum(SessionStatus), nullable=False, default=SessionStatus.IDLE)
+    bridge_id = Column(Integer, nullable=False)  # Removed FK constraint temporarily
+    stage_id = Column(Integer, nullable=True)   # Removed FK constraint temporarily
+    status = Column(String(20), nullable=False, default="idle")  # Use string instead of enum temporarily
     started_at = Column(DateTime, nullable=False, default=func.now())
     ended_at = Column(DateTime, nullable=True)
     last_activity = Column(DateTime, nullable=False, default=func.now())
@@ -71,8 +71,9 @@ class ActiveSession(Base):
     
     # Relationships  
     device_leases = relationship("DeviceLease", back_populates="session", cascade="all, delete-orphan")
-    bridge = relationship("Bridge", foreign_keys=[bridge_id])
-    stage = relationship("Stage", foreign_keys=[stage_id])
+    # Use string references for models in other modules to avoid circular imports
+    # bridge = relationship("Bridge", foreign_keys=[bridge_id])
+    # stage = relationship("Stage", foreign_keys=[stage_id])
     
     __table_args__ = (
         Index('idx_session_bridge', 'bridge_id'),
