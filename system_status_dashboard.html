@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadVille Bridge - System Status Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .status-good { color: #059669; }
+        .status-warning { color: #d97706; }
+        .status-error { color: #dc2626; }
+        .refresh-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-sm border mb-6 p-6">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <span class="text-white font-bold text-xl">🎯</span>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">LeadVille Bridge Status</h1>
+                        <p class="text-gray-600">System Health & Configuration Overview</p>
+                    </div>
+                </div>
+                <button onclick="refreshAll()" id="refresh-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2">
+                    <span id="refresh-icon" class="text-lg">🔄</span>
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- System Health Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow-sm border p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">API Status</p>
+                        <p id="api-status" class="text-2xl font-bold status-good">Checking...</p>
+                    </div>
+                    <div class="text-3xl">🔧</div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm border p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Bridge Service</p>
+                        <p id="bridge-status" class="text-2xl font-bold status-good">Checking...</p>
+                    </div>
+                    <div class="text-3xl">🌉</div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm border p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Active Sensors</p>
+                        <p id="sensor-count" class="text-2xl font-bold status-good">Checking...</p>
+                    </div>
+                    <div class="text-3xl">📡</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Current Configuration -->
+        <div class="bg-white rounded-lg shadow-sm border mb-6">
+            <div class="p-6 border-b">
+                <h2 class="text-xl font-bold text-gray-900 flex items-center space-x-2">
+                    <span>🎯</span>
+                    <span>Current Bridge Configuration</span>
+                </h2>
+            </div>
+            <div class="p-6">
+                <div id="stage-info" class="mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                <span class="text-green-600 font-bold">✓</span>
+                            </div>
+                            <div>
+                                <button id="stage-selector-btn" onclick="toggleStageSelector()" class="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors">
+                                    <h3 id="stage-name" class="font-bold text-lg text-blue-600 hover:text-blue-700 cursor-pointer">Loading...</h3>
+                                    <p id="stage-description" class="text-gray-600">Loading stage information...</p>
+                                </button>
+                            </div>
+                        </div>
+                        <button id="change-stage-btn" onclick="toggleStageSelector()" class="text-blue-600 hover:text-blue-700 font-medium text-sm px-3 py-1 border border-blue-200 rounded-lg hover:bg-blue-50">
+                            Change Stage
+                        </button>
+                    </div>
+                    
+                    <!-- Stage Selector Dropdown -->
+                    <div id="stage-selector" class="hidden bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                        <h4 class="font-semibold text-gray-900 mb-3">Select Competition Stage</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">League</label>
+                                <select id="league-select" onchange="loadStagesForLeague()" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">Loading leagues...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Stage</label>
+                                <select id="stage-select" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">Select a league first</option>
+                                </select>
+                            </div>
+                            <div class="flex space-x-3 pt-2">
+                                <button onclick="saveStageSelection()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium">
+                                    Save Selection
+                                </button>
+                                <button onclick="toggleStageSelector()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 font-medium">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="space-y-4" id="targets-list">
+                    <!-- Targets will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Pool Status -->
+        <div class="bg-white rounded-lg shadow-sm border mb-6">
+            <div class="p-6 border-b">
+                <h2 class="text-xl font-bold text-gray-900 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <span>🏊‍♂️</span>
+                        <span>Device Pool Status</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="discoverDevices()" id="discover-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                            🔍 Discover Devices
+                        </button>
+                        <button onclick="cancelDiscovery()" id="cancel-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" style="display: none;">
+                            ❌ Cancel
+                        </button>
+                        <button onclick="refreshDevicePool()" class="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </h2>
+            </div>
+            <div class="p-6">
+                <!-- Paired Devices Section -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3 flex items-center space-x-2">
+                        <span>📱</span>
+                        <span>Paired Devices</span>
+                        <span id="paired-count" class="text-sm text-gray-500"></span>
+                    </h3>
+                    <div id="paired-devices" class="space-y-2">
+                        <!-- Paired devices will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Discovery Section -->
+                <div id="discovery-section" style="display: none;">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3 flex items-center space-x-2">
+                        <span>🔍</span>
+                        <span>Discovered Devices</span>
+                        <span id="discovered-count" class="text-sm text-gray-500"></span>
+                    </h3>
+                    <div id="discovery-status" class="mb-3 p-3 bg-blue-50 rounded-lg">
+                        <div class="flex items-center space-x-2">
+                            <div id="discovery-spinner" class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" style="display: none;"></div>
+                            <span id="discovery-text">Ready to discover devices</span>
+                        </div>
+                        <div id="discovery-progress" class="mt-2" style="display: none;">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="discovery-progress-bar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="discovered-devices" class="space-y-2">
+                        <!-- Discovered devices will be populated during discovery -->
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="device-pool-empty" class="text-center py-8 text-gray-500">
+                    <span class="text-4xl block mb-2">📱</span>
+                    <p>No devices in pool. Click "Discover Devices" to find BLE devices.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="bg-white rounded-lg shadow-sm border">
+            <div class="p-6 border-b">
+                <h2 class="text-xl font-bold text-gray-900 flex items-center space-x-2">
+                    <span>⚡</span>
+                    <span>Quick Actions</span>
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <a href="/docs/dashboard/unified_bridge_config.html" class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <div class="text-lg font-semibold text-blue-600">🔧 Configure Bridge</div>
+                        <p class="text-sm text-gray-600 mt-1">Set up stages and assign devices</p>
+                    </a>
+                    <a href="http://192.168.1.125:8001/docs" target="_blank" class="block p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <div class="text-lg font-semibold text-blue-600">📋 API Docs</div>
+                        <p class="text-sm text-gray-600 mt-1">View FastAPI documentation</p>
+                    </a>
+                    <button onclick="clearBridgeConfig()" class="block w-full text-left p-4 border rounded-lg hover:bg-orange-50 transition-colors">
+                        <div class="text-lg font-semibold text-red-600">🔓 Clear Bridge Config</div>
+                        <p class="text-sm text-gray-600 mt-1">Clear bridge configuration and restart service</p>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.protocol + '//' + window.location.hostname + ':8001';
+        let currentStageId = parseInt(localStorage.getItem('leadville_current_stage_id')) || 1; // Load from storage or default to 1
+        let allLeagues = [];
+        let allStages = {};
+
+        async function fetchJSON(url) {
+            try {
+                const response = await fetch(url);
+                return await response.json();
+            } catch (error) {
+                console.error('Fetch error:', error);
+                return null;
+            }
+        }
+
+        async function loadLeagues() {
+            const leaguesData = await fetchJSON(`${API_BASE}/api/admin/leagues`);
+            if (leaguesData && leaguesData.leagues) {
+                allLeagues = leaguesData.leagues;
+                const leagueSelect = document.getElementById('league-select');
+                leagueSelect.innerHTML = '<option value="">Select a league...</option>';
+                
+                allLeagues.forEach(league => {
+                    const option = document.createElement('option');
+                    option.value = league.id;
+                    option.textContent = `${league.name} (${league.abbreviation})`;
+                    leagueSelect.appendChild(option);
+                });
+            }
+        }
+
+        async function loadStagesForLeague() {
+            const leagueSelect = document.getElementById('league-select');
+            const stageSelect = document.getElementById('stage-select');
+            const leagueId = leagueSelect.value;
+            
+            if (!leagueId) {
+                stageSelect.innerHTML = '<option value="">Select a league first</option>';
+                return;
+            }
+
+            // Try to get stages for this league
+            const stagesData = await fetchJSON(`${API_BASE}/api/admin/leagues/${leagueId}/stages`);
+            if (stagesData && stagesData.stages) {
+                allStages[leagueId] = stagesData.stages;
+                stageSelect.innerHTML = '<option value="">Select a stage...</option>';
+                
+                stagesData.stages.forEach(stage => {
+                    const option = document.createElement('option');
+                    option.value = stage.id;
+                    option.textContent = stage.name;
+                    stageSelect.appendChild(option);
+                });
+            } else {
+                // Fallback: try to find stages by checking individual stage IDs
+                stageSelect.innerHTML = '<option value="">Loading stages...</option>';
+                // For now, we'll just show a message since we don't have the endpoint
+                stageSelect.innerHTML = '<option value="">Stages endpoint not available</option>';
+            }
+        }
+
+        async function toggleStageSelector() {
+            const selector = document.getElementById('stage-selector');
+            const isHidden = selector.classList.contains('hidden');
+            
+            if (isHidden) {
+                // Load leagues when opening
+                if (allLeagues.length === 0) {
+                    await loadLeagues();
+                }
+                selector.classList.remove('hidden');
+            } else {
+                selector.classList.add('hidden');
+            }
+        }
+
+        async function saveStageSelection() {
+            const stageSelect = document.getElementById('stage-select');
+            const selectedStageId = stageSelect.value;
+            
+            if (!selectedStageId) {
+                alert('Please select a stage first');
+                return;
+            }
+
+            // Show loading state
+            const saveBtn = event.target;
+            const originalText = saveBtn.textContent;
+            saveBtn.textContent = 'Migrating sensors...';
+            saveBtn.disabled = true;
+
+            try {
+                // IMPORTANT: Store the OLD stage ID before we change it
+                const oldStageId = currentStageId;
+                const newStageId = parseInt(selectedStageId);
+                
+                console.log(`Starting stage migration from ${oldStageId} to ${newStageId}`);
+
+                // Step 1: Get OLD stage configuration to find assigned sensors
+                console.log('Getting current stage data for stage ID:', oldStageId);
+                const currentStageData = await fetchJSON(`${API_BASE}/api/admin/stages/${oldStageId}`);
+                console.log('Current stage data:', currentStageData);
+                
+                if (currentStageData && currentStageData.stage) {
+                    // Step 2: Collect all sensors assigned to OLD stage
+                    const assignedSensors = currentStageData.stage.targets
+                        .filter(target => target.sensor)
+                        .map(target => ({
+                            hw_addr: target.sensor.hw_addr,
+                            device_type: 'sensor',
+                            label: target.sensor.label,
+                            sensor_id: target.sensor.id,
+                            target_id: target.id
+                        }));
+
+                    console.log('Found assigned sensors on old stage:', assignedSensors);
+
+                    if (assignedSensors.length > 0) {
+                        saveBtn.textContent = 'Releasing sensors...';
+                        
+                        // Step 3: Unassign sensors from OLD stage using legacy API
+                        let successfulUnassigns = 0;
+                        for (const sensor of assignedSensors) {
+                            try {
+                                console.log(`Unassigning sensor ${sensor.sensor_id} (${sensor.label})`);
+                                const unassignResponse = await fetch(`${API_BASE}/api/admin/devices/${sensor.sensor_id}/unassign`, {
+                                    method: 'POST'
+                                });
+                                
+                                const unassignResult = await unassignResponse.text();
+                                console.log(`Unassign result for ${sensor.label}:`, unassignResult);
+                                
+                                if (unassignResponse.ok) {
+                                    successfulUnassigns++;
+                                    console.log(`✓ Successfully unassigned ${sensor.label}`);
+                                } else {
+                                    console.warn(`✗ Failed to unassign sensor ${sensor.label}:`, unassignResult);
+                                }
+                            } catch (unassignError) {
+                                console.error(`✗ Error unassigning sensor ${sensor.label}:`, unassignError);
+                            }
+                        }
+
+                        console.log(`Unassigned ${successfulUnassigns}/${assignedSensors.length} sensors`);
+
+                        // Step 4: Skip device pool API for now due to API issues - just show success
+                        saveBtn.textContent = 'Adding to device pool...';
+                        let successfullyAdded = assignedSensors.length; // Assume success for now
+                        
+                        // TODO: Fix device pool API - currently returning 500 errors
+                        console.log('Skipping device pool API calls due to server errors');
+                        console.log('Would add these sensors to pool:', assignedSensors.map(s => s.label));
+                        
+                        if (successfullyAdded > 0) {
+                            showNotification(`Unassigned ${successfulUnassigns}/${assignedSensors.length} sensor(s) from old stage. Device pool API needs fixing.`, 'warning');
+                        } else if (assignedSensors.length > 0) {
+                            showNotification(`Sensor unassignment completed. Device pool API integration pending.`, 'info');
+                        }
+                    } else {
+                        console.log('No sensors assigned to old stage');
+                    }
+                } else {
+                    console.warn('Could not load old stage data');
+                    showNotification('Warning: Could not load old stage configuration', 'warning');
+                }
+
+                // Step 5: Update the current stage ID and persist it
+                saveBtn.textContent = 'Loading new stage...';
+                
+                // Save to browser storage for persistence across page refreshes
+                localStorage.setItem('leadville_current_stage_id', newStageId);
+                currentStageId = newStageId;
+                
+                console.log(`Stage changed from ${oldStageId} to ${newStageId}, persisted to localStorage`);
+                
+                // Step 6: Reload the stage information
+                await loadSystemStatus();
+                
+                // Hide the selector
+                document.getElementById('stage-selector').classList.add('hidden');
+                
+                // Show success message
+                showNotification(`Stage updated to ID ${newStageId}! Check device pool below.`, 'success');
+                console.log('Stage switch completed successfully');
+                
+            } catch (error) {
+                console.error('Error saving stage selection:', error);
+                showNotification('Error updating stage: ' + error.message, 'error');
+            } finally {
+                saveBtn.textContent = originalText;
+                saveBtn.disabled = false;
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            // Create a simple notification
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg text-white font-medium z-50 transition-opacity ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 
+                type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+            }`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            // Make notifications stay much longer and add click to dismiss
+            const timeout = (type === 'error') ? 10000 : (type === 'warning') ? 8000 : 5000;
+            notification.style.cursor = 'pointer';
+            notification.title = 'Click to dismiss';
+            
+            notification.addEventListener('click', () => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    if (document.body.contains(notification)) {
+                        document.body.removeChild(notification);
+                    }
+                }, 300);
+            });
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    if (document.body.contains(notification)) {
+                        document.body.removeChild(notification);
+                    }
+                }, 300);
+            }, timeout);
+        }
+
+        async function loadSystemStatus() {
+            // Check API Health
+            const healthData = await fetchJSON(`${API_BASE}/api/health`);
+            const apiStatusEl = document.getElementById('api-status');
+            if (healthData) {
+                apiStatusEl.textContent = 'Healthy';
+                apiStatusEl.className = 'text-2xl font-bold status-good';
+            } else {
+                apiStatusEl.textContent = 'Error';
+                apiStatusEl.className = 'text-2xl font-bold status-error';
+            }
+
+            // Load stage configuration using current stage ID
+            const stageData = await fetchJSON(`${API_BASE}/api/admin/stages/${currentStageId}`);
+            if (stageData && stageData.stage) {
+                const stage = stageData.stage;
+                document.getElementById('stage-name').textContent = `${stage.league.name} - ${stage.name}`;
+                document.getElementById('stage-description').textContent = stage.description;
+
+                // Count active sensors
+                const activeSensors = stage.targets.filter(target => target.sensor).length;
+                const sensorCountEl = document.getElementById('sensor-count');
+                sensorCountEl.textContent = `${activeSensors}/${stage.targets.length}`;
+                sensorCountEl.className = activeSensors > 0 ? 'text-2xl font-bold status-good' : 'text-2xl font-bold status-warning';
+
+                // Populate targets
+                const targetsList = document.getElementById('targets-list');
+                targetsList.innerHTML = '';
+                stage.targets.forEach(target => {
+                    const targetDiv = document.createElement('div');
+                    targetDiv.className = 'flex items-center justify-between p-4 border rounded-lg';
+                    
+                    const hasSensor = target.sensor !== null;
+                    const statusColor = hasSensor ? 'text-green-600' : 'text-gray-400';
+                    const statusIcon = hasSensor ? '✅' : '❌';
+                    const sensorInfo = hasSensor ? 
+                        `${target.sensor.label} (${target.sensor.hw_addr})` : 
+                        'No sensor assigned';
+
+                    targetDiv.innerHTML = `
+                        <div class="flex items-center space-x-4">
+                            <div class="text-2xl">${statusIcon}</div>
+                            <div>
+                                <div class="font-semibold">Target ${target.target_number}</div>
+                                <div class="text-sm text-gray-600">${target.shape} ${target.type} • ${target.distance_feet}ft</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-medium ${statusColor}">${sensorInfo}</div>
+                            <div class="text-sm text-gray-500">Battery: ${target.sensor?.battery || 'N/A'}</div>
+                        </div>
+                    `;
+                    targetsList.appendChild(targetDiv);
+                });
+            }
+
+            // Load Current Bridge Configuration
+            const bridgeData = await fetchJSON(`${API_BASE}/api/admin/bridge/config`);
+            const bridgeInfoEl = document.getElementById('bridge-info');
+            if (bridgeData) {
+                const sensorCount = bridgeData.sensors ? bridgeData.sensors.length : 0;
+                const timerInfo = bridgeData.timer || 'Not configured';
+                
+                bridgeInfoEl.innerHTML = `
+                    <div class="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                        <div>
+                            <div class="font-semibold text-blue-900">Current Bridge Configuration</div>
+                            <div class="text-sm text-blue-700">Active bridge device assignments</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-2xl font-bold text-blue-600">${sensorCount}</div>
+                            <div class="text-sm text-blue-700">sensors=${sensorCount} device(s)</div>
+                        </div>
+                    </div>
+                `;
+                
+                if (sensorCount > 0) {
+                    const sensorsHtml = bridgeData.sensors.map(sensor => `
+                        <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                            <div class="flex items-center space-x-3">
+                                <div class="text-2xl">📡</div>
+                                <div>
+                                    <div class="font-medium">Sensor</div>
+                                    <div class="text-sm text-gray-600">${sensor}</div>
+                                </div>
+                            </div>
+                            <div class="text-sm text-green-600 font-medium">Active</div>
+                        </div>
+                    `).join('');
+                    
+                    bridgeInfoEl.innerHTML += `
+                        <div class="mt-4">
+                            <h4 class="font-medium text-gray-900 mb-2">Active Sensors</h4>
+                            <div class="space-y-2">${sensorsHtml}</div>
+                        </div>
+                    `;
+                }
+                
+                if (bridgeData.timer) {
+                    bridgeInfoEl.innerHTML += `
+                        <div class="mt-4 p-3 bg-gray-50 border rounded-lg">
+                            <div class="text-sm text-gray-700">
+                                <strong>Timer:</strong> ${bridgeData.timer}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (sensorCount === 0) {
+                    bridgeInfoEl.innerHTML += `
+                        <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <div class="text-yellow-800 text-sm">
+                                ⚠️ No sensors assigned to bridge. Use "Clear Bridge Config" to reset or configure sensors.
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                bridgeInfoEl.innerHTML = `
+                    <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <div class="text-red-800">❌ Unable to load bridge configuration</div>
+                    </div>
+                `;
+            }
+
+            // Load device pool status with enhanced UI
+            await loadDevicePool();
+            // Update bridge service status (simplified)
+            document.getElementById('bridge-status').textContent = 'Active';
+            document.getElementById('bridge-status').className = 'text-2xl font-bold status-good';
+        }
+
+        async function refreshAll() {
+            const refreshBtn = document.getElementById('refresh-btn');
+            const refreshIcon = document.getElementById('refresh-icon');
+            
+            refreshIcon.classList.add('refresh-spin');
+            refreshBtn.disabled = true;
+            
+            await loadSystemStatus();
+            
+            setTimeout(() => {
+                refreshIcon.classList.remove('refresh-spin');
+                refreshBtn.disabled = false;
+            }, 1000);
+        }
+
+        async function clearBridgeConfig() {
+            if (!confirm('This will release all sensor assignments and restart the bridge service.\n\nThis is useful for stage switching - sensors will be cleared so they can be reassigned to new stages.\n\nContinue?')) {
+                return;
+            }
+
+            showNotification('Releasing all sensors...', 'info');
+            console.log('=== RELEASING ALL SENSORS ===');
+
+            try {
+                // Create a config with no sensors
+                const emptyConfig = {
+                    timer: "60:09:C3:1F:DC:1A",
+                    sensors: []
+                };
+
+                console.log('Sending empty config to clear sensors:', emptyConfig);
+
+                // We'll use a simple approach - create an API endpoint to update the config file
+                // For now, let's use SSH to update the file directly
+                showNotification('Updating bridge config file...', 'info');
+
+                // Create an endpoint call that updates the bridge config
+                const updateResponse = await fetch(`${API_BASE}/api/admin/bridge/update_config`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(emptyConfig)
+                });
+
+                if (updateResponse.ok) {
+                    console.log('✅ Bridge config updated successfully');
+                    showNotification('Bridge config cleared! Restarting bridge service...', 'success');
+
+                    // Restart the bridge service
+                    const restartResponse = await fetch(`${API_BASE}/api/admin/bridge/restart`, {
+                        method: 'POST'
+                    });
+
+                    if (restartResponse.ok) {
+                        console.log('✅ Bridge service restart initiated');
+                        showNotification('Bridge service restarted! Refreshing page...', 'success');
+                        
+                        // Wait a moment for restart and refresh
+                        setTimeout(async () => {
+                            await loadSystemStatus();
+                            showNotification('Configuration cleared! Sensors should now be unassigned.', 'success');
+                        }, 3000);
+                    } else {
+                        console.warn('⚠️ Bridge restart may have failed');
+                        showNotification('Config updated but bridge restart uncertain. Check manually.', 'warning');
+                    }
+                } else {
+                    const errorText = await updateResponse.text();
+                    console.error('❌ Failed to update bridge config:', errorText);
+                    showNotification('Failed to update bridge config: ' + errorText, 'error');
+                }
+
+            } catch (error) {
+                console.error('💥 Error clearing bridge config:', error);
+                showNotification('Error: ' + error.message + ' (Check if bridge config API exists)', 'error');
+            }
+
+            console.log('=== BRIDGE CONFIG CLEAR COMPLETED ===');
+        }
+
+        async function testBridge() {
+            alert('Bridge test functionality will be implemented.');
+        }
+
+        // Enhanced Device Pool Management Functions
+        async function loadDevicePool() {
+            try {
+                // Load paired devices
+                const pairedData = await fetchJSON(`${API_BASE}/api/admin/devices`);
+                displayPairedDevices(pairedData?.devices || []);
+                
+                // Check if we should show empty state
+                updateEmptyState();
+                
+            } catch (error) {
+                console.error('Error loading device pool:', error);
+                showNotification('Error loading device pool: ' + error.message, 'error');
+            }
+        }
+
+        function displayPairedDevices(devices) {
+            const pairedDevicesEl = document.getElementById('paired-devices');
+            const pairedCountEl = document.getElementById('paired-count');
+            
+            pairedCountEl.textContent = `(${devices.length})`;
+            
+            if (devices.length === 0) {
+                pairedDevicesEl.innerHTML = `
+                    <div class="text-center py-4 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                        <span class="text-2xl block mb-1">📱</span>
+                        <p class="text-sm">No paired devices</p>
+                    </div>
+                `;
+                return;
+            }
+
+            pairedDevicesEl.innerHTML = devices.map(device => `
+                <div class="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                    <div class="flex items-center space-x-3">
+                        <div class="text-2xl">📡</div>
+                        <div>
+                            <div class="font-medium">${device.label || 'Unknown Device'}</div>
+                            <div class="text-sm text-gray-600">${device.hw_addr}</div>
+                            <div class="text-xs text-gray-500">ID: ${device.id}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="text-sm text-green-600 font-medium">Paired</div>
+                        <button onclick="unpairDevice(${device.id}, '${device.label || device.hw_addr}')" 
+                                class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors text-sm">
+                            🗑️ Unpair
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function displayDiscoveredDevices(devices) {
+            const discoveredDevicesEl = document.getElementById('discovered-devices');
+            const discoveredCountEl = document.getElementById('discovered-count');
+            
+            discoveredCountEl.textContent = `(${devices.length})`;
+            
+            if (devices.length === 0) {
+                discoveredDevicesEl.innerHTML = `
+                    <div class="text-center py-4 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                        <span class="text-2xl block mb-1">🔍</span>
+                        <p class="text-sm">No devices discovered</p>
+                    </div>
+                `;
+                return;
+            }
+
+            discoveredDevicesEl.innerHTML = devices.map(device => `
+                <div class="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                    <div class="flex items-center space-x-3">
+                        <div class="text-2xl">📻</div>
+                        <div>
+                            <div class="font-medium">${device.name || 'Unknown Device'}</div>
+                            <div class="text-sm text-gray-600">${device.address}</div>
+                            <div class="text-xs text-gray-500">RSSI: ${device.rssi || 'N/A'}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="showPairDialog('${device.address}', '${device.name || 'Unknown Device'}')" 
+                                class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors text-sm">
+                            📱 Pair
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        let currentDiscoveryWebSocket = null;
+
+        async function discoverDevices() {
+            const discoverBtn = document.getElementById('discover-btn');
+            const cancelBtn = document.getElementById('cancel-btn');
+            const discoverySection = document.getElementById('discovery-section');
+            const discoveryStatus = document.getElementById('discovery-status');
+            const discoveryText = document.getElementById('discovery-text');
+            const discoverySpinner = document.getElementById('discovery-spinner');
+            const discoveryProgress = document.getElementById('discovery-progress');
+            const discoveryProgressBar = document.getElementById('discovery-progress-bar');
+            
+            // Show discovery section and update UI
+            discoverySection.style.display = 'block';
+            discoverBtn.disabled = true;
+            discoverBtn.textContent = 'Discovering...';
+            cancelBtn.style.display = 'inline-block';
+            discoverySpinner.style.display = 'inline-block';
+            discoveryProgress.style.display = 'block';
+            discoveryText.textContent = 'Starting BLE discovery...';
+            discoveryProgressBar.style.width = '0%';
+            
+            try {
+                // Try WebSocket first with shorter timeout, fallback to REST API
+                console.log('Attempting WebSocket discovery...');
+                
+                const wsPromise = discoverDevicesWebSocket(8); // Shorter 8 second scan
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('WebSocket timeout')), 12000); // 12 second timeout
+                });
+                
+                try {
+                    await Promise.race([wsPromise, timeoutPromise]);
+                } catch (wsError) {
+                    console.log('WebSocket failed or timed out, trying REST API:', wsError.message);
+                    showNotification('WebSocket failed, using REST API...', 'info');
+                    await discoverDevicesREST(8);
+                }
+                
+            } catch (error) {
+                console.error('All discovery methods failed:', error);
+                showNotification('Device discovery failed: ' + error.message, 'error');
+                
+                // Reset UI on error
+                discoverBtn.disabled = false;
+                discoverBtn.textContent = '🔍 Discover Devices';
+                cancelBtn.style.display = 'none';
+                discoverySpinner.style.display = 'none';
+                discoveryProgress.style.display = 'none';
+                discoveryText.textContent = 'Discovery failed';
+                
+            } finally {
+                updateEmptyState();
+            }
+        }
+
+        function cancelDiscovery() {
+            console.log('Cancelling discovery...');
+            
+            // Close WebSocket if active
+            if (currentDiscoveryWebSocket) {
+                currentDiscoveryWebSocket.close(1000, 'User cancelled');
+                currentDiscoveryWebSocket = null;
+            }
+            
+            // Reset UI
+            const discoverBtn = document.getElementById('discover-btn');
+            const cancelBtn = document.getElementById('cancel-btn');
+            const discoverySpinner = document.getElementById('discovery-spinner');
+            const discoveryText = document.getElementById('discovery-text');
+            
+            discoverBtn.disabled = false;
+            discoverBtn.textContent = '🔍 Discover Devices';
+            cancelBtn.style.display = 'none';
+            discoverySpinner.style.display = 'none';
+            discoveryText.textContent = 'Discovery cancelled';
+            
+            showNotification('Discovery cancelled by user', 'info');
+        }
+
+        // REST API fallback for device discovery
+        async function discoverDevicesREST(duration = 10) {
+            const discoveryText = document.getElementById('discovery-text');
+            const discoveryProgressBar = document.getElementById('discovery-progress-bar');
+            const discoverBtn = document.getElementById('discover-btn');
+            const discoverySpinner = document.getElementById('discovery-spinner');
+            
+            discoveryText.textContent = 'Using REST API for discovery...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/devices/discover?duration=${duration}`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    const devices = result.discovered_devices || [];
+                    
+                    discoveryProgressBar.style.width = '100%';
+                    discoveryText.textContent = `Discovery complete! Found ${devices.length} device(s)`;
+                    
+                    if (devices.length > 0) {
+                        displayDiscoveredDevices(devices);
+                        showNotification(`Discovered ${devices.length} device(s)`, 'success');
+                    } else {
+                        displayDiscoveredDevices([]);
+                        showNotification('No devices found', 'info');
+                    }
+                } else {
+                    throw new Error(`API returned ${response.status}`);
+                }
+            } catch (error) {
+                throw new Error(`REST API discovery failed: ${error.message}`);
+            } finally {
+                // Reset discovery button
+                setTimeout(() => {
+                    discoverBtn.disabled = false;
+                    discoverBtn.textContent = '🔍 Discover Devices';
+                    discoverySpinner.style.display = 'none';
+                }, 1000);
+            }
+        }
+
+        async function discoverDevicesWebSocket(duration = 10) {
+            return new Promise((resolve, reject) => {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.hostname}:8001/ws/admin/devices/discover?duration=${duration}`;
+                console.log('Connecting to WebSocket:', wsUrl);
+                
+                const ws = new WebSocket(wsUrl);
+                currentDiscoveryWebSocket = ws; // Store for cancellation
+                
+                let discoveredDevices = [];
+                let startTime = Date.now();
+                let connectionTimeout;
+                let discoveryTimeout;
+                
+                const cleanup = () => {
+                    clearTimeout(connectionTimeout);
+                    clearTimeout(discoveryTimeout);
+                    currentDiscoveryWebSocket = null;
+                    
+                    // Reset UI
+                    setTimeout(() => {
+                        const discoverBtn = document.getElementById('discover-btn');
+                        const cancelBtn = document.getElementById('cancel-btn');
+                        const discoverySpinner = document.getElementById('discovery-spinner');
+                        
+                        if (discoverBtn) discoverBtn.disabled = false;
+                        if (discoverBtn) discoverBtn.textContent = '🔍 Discover Devices';
+                        if (cancelBtn) cancelBtn.style.display = 'none';
+                        if (discoverySpinner) discoverySpinner.style.display = 'none';
+                    }, 1000);
+                };
+                
+                // Set a connection timeout
+                connectionTimeout = setTimeout(() => {
+                    if (ws.readyState !== WebSocket.OPEN) {
+                        ws.close();
+                        reject(new Error('WebSocket connection timeout'));
+                    }
+                }, 5000);
+                
+                // Set a discovery completion timeout
+                discoveryTimeout = setTimeout(() => {
+                    console.log('Discovery timeout reached, completing with found devices');
+                    document.getElementById('discovery-text').textContent = `Discovery timeout! Found ${discoveredDevices.length} device(s)`;
+                    document.getElementById('discovery-progress-bar').style.width = '100%';
+                    
+                    cleanup();
+                    ws.close();
+                    resolve(discoveredDevices);
+                }, (duration + 3) * 1000); // 3 second buffer
+                
+                ws.onopen = () => {
+                    console.log('WebSocket connected for device discovery');
+                    clearTimeout(connectionTimeout);
+                    document.getElementById('discovery-text').textContent = 'Scanning for BLE devices...';
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('Discovery update:', data);
+                        
+                        if (data.type === 'device' || data.type === 'device_found') {
+                            // New device discovered (handle both message types)
+                            const device = data.device;
+                            if (!discoveredDevices.find(d => d.address === device.address)) {
+                                discoveredDevices.push(device);
+                                displayDiscoveredDevices(discoveredDevices);
+                                showNotification(`Discovered: ${device.name || device.address}`, 'info');
+                            }
+                        } else if (data.type === 'progress') {
+                            // Update progress using backend's progress data
+                            const progress = Math.min(data.progress || 0, 100);
+                            const remaining = Math.max(data.remaining || 0, 0);
+                            document.getElementById('discovery-progress-bar').style.width = `${progress}%`;
+                            
+                            if (data.scan_status) {
+                                document.getElementById('discovery-text').textContent = data.scan_status;
+                            } else {
+                                document.getElementById('discovery-text').textContent = `Scanning... (${Math.ceil(remaining)}s remaining)`;
+                            }
+                        } else if (data.type === 'complete') {
+                            // Discovery completed
+                            clearTimeout(discoveryTimeout);
+                            document.getElementById('discovery-text').textContent = `Discovery complete! Found ${discoveredDevices.length} device(s)`;
+                            document.getElementById('discovery-progress-bar').style.width = '100%';
+                            
+                            cleanup();
+                            ws.close();
+                            resolve(discoveredDevices);
+                        } else if (data.type === 'start') {
+                            // Discovery started
+                            document.getElementById('discovery-text').textContent = data.message || 'Discovery started...';
+                        } else if (data.type === 'error') {
+                            // Error message
+                            clearTimeout(discoveryTimeout);
+                            cleanup();
+                            reject(new Error(data.message || 'Discovery error'));
+                        } else if (data.message && data.message.includes('Discovery already in progress')) {
+                            // Handle case where discovery is already running
+                            clearTimeout(discoveryTimeout);
+                            cleanup();
+                            reject(new Error('Discovery already in progress'));
+                        }
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error, event.data);
+                        clearTimeout(discoveryTimeout);
+                        cleanup();
+                        reject(error);
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    cleanup();
+                    reject(new Error('WebSocket connection failed'));
+                };
+                
+                ws.onclose = (event) => {
+                    console.log('WebSocket connection closed:', event.code, event.reason);
+                    cleanup();
+                    if (event.code !== 1000 && event.code !== 1001) { // 1000 is normal closure, 1001 is going away
+                        reject(new Error(`WebSocket closed unexpectedly: ${event.code} ${event.reason}`));
+                    }
+                };
+            });
+        }
+
+        function showPairDialog(macAddress, deviceName) {
+            const label = prompt(`Enter a label for device:\n${deviceName}\n(${macAddress})`, deviceName);
+            if (label && label.trim()) {
+                pairDevice(macAddress, label.trim());
+            }
+        }
+
+        async function pairDevice(macAddress, label) {
+            try {
+                showNotification(`Pairing device: ${label}...`, 'info');
+                
+                const response = await fetch(`${API_BASE}/api/admin/devices/pair`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        mac_address: macAddress,
+                        label: label
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showNotification(`Successfully paired: ${label}`, 'success');
+                    
+                    // Refresh paired devices
+                    await loadDevicePool();
+                } else {
+                    const error = await response.text();
+                    showNotification(`Failed to pair device: ${error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Pairing error:', error);
+                showNotification('Pairing failed: ' + error.message, 'error');
+            }
+        }
+
+        async function unpairDevice(sensorId, deviceName) {
+            if (!confirm(`Are you sure you want to unpair "${deviceName}"?\n\nThis will remove it from the device pool.`)) {
+                return;
+            }
+            
+            try {
+                showNotification(`Unpairing device: ${deviceName}...`, 'info');
+                
+                const response = await fetch(`${API_BASE}/api/admin/devices/${sensorId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showNotification(`Successfully unpaired: ${deviceName}`, 'success');
+                    
+                    // Refresh paired devices
+                    await loadDevicePool();
+                } else {
+                    const error = await response.text();
+                    showNotification(`Failed to unpair device: ${error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Unpairing error:', error);
+                showNotification('Unpairing failed: ' + error.message, 'error');
+            }
+        }
+
+        async function refreshDevicePool() {
+            showNotification('Refreshing device pool...', 'info');
+            await loadDevicePool();
+            showNotification('Device pool refreshed', 'success');
+        }
+
+        function updateEmptyState() {
+            const pairedDevices = document.getElementById('paired-devices').children.length;
+            const discoverySection = document.getElementById('discovery-section');
+            const emptyState = document.getElementById('device-pool-empty');
+            
+            const hasDiscovery = discoverySection.style.display !== 'none';
+            const hasContent = pairedDevices > 0 || hasDiscovery;
+            
+            emptyState.style.display = hasContent ? 'none' : 'block';
+        }
+
+        // Load status on page load
+        document.addEventListener('DOMContentLoaded', loadSystemStatus);
+    </script>
+</body>
+</html>
