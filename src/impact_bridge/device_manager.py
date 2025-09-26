@@ -75,10 +75,26 @@ class DeviceManager:
         logger.info(f"Starting BLE device discovery for {duration} seconds...")
         
         try:
-            devices = await BleakScanner.discover(timeout=duration)
+            # Use return_adv=True to get RSSI data from advertisements
+            discovered = await BleakScanner.discover(timeout=duration, return_adv=True)
             
-            for device in devices:
-                device_info = await self._analyze_device(device)
+            # Get list of already paired devices to filter them out
+            paired_addresses = set()
+            try:
+                with get_database_session() as session:
+                    paired_sensors = session.query(Sensor).all()
+                    paired_addresses = {sensor.hw_addr for sensor in paired_sensors}
+                    logger.info(f"Filtering out {len(paired_addresses)} already-paired devices")
+            except Exception as e:
+                logger.warning(f"Could not load paired devices for filtering: {e}")
+            
+            for device, adv_data in discovered.values():
+                # Skip devices that are already paired
+                if device.address in paired_addresses:
+                    logger.debug(f"Skipping already-paired device: {device.address}")
+                    continue
+                    
+                device_info = await self._analyze_device(device, adv_data)
                 if device_info and self._is_relevant_device(device_info):
                     self.discovered_devices[device.address] = device_info
                     
@@ -124,17 +140,27 @@ class DeviceManager:
         logger.info(f"Discovered {len(self.discovered_devices)} relevant devices (BT50/AMG)")
         return list(self.discovered_devices.values())
     
-    async def _analyze_device(self, device: BLEDevice) -> Optional[Dict[str, Any]]:
+    async def _analyze_device(self, device: BLEDevice, adv_data=None) -> Optional[Dict[str, Any]]:
         """Analyze discovered device and determine type"""
+        
+        # Extract RSSI from advertisement data if available
+        rssi = None
+        if adv_data and hasattr(adv_data, 'rssi'):
+            rssi = adv_data.rssi
+        elif hasattr(device, 'rssi'):
+            rssi = device.rssi
+        
         device_info = {
             'address': device.address,
             'name': device.name or 'Unknown',
-            'rssi': getattr(device, 'rssi', None),  # Safely get rssi if available
+            'rssi': rssi,  # Now properly extracted from advertisement data
             'discovered_at': datetime.utcnow().isoformat(),
             'type': 'unknown',
             'vendor': 'unknown',
             'services': [],
-            'pairable': False
+            'pairable': False,
+            'battery': None,  # Will be populated during connection
+            'connection_status': 'unknown'  # Will be updated during connection
         }
         
         # Try to determine device type from name
@@ -149,26 +175,229 @@ class DeviceManager:
                         })
                         break
         
-        # Try to get service information (may not work for all devices)
+        # Try to get service information and battery status
         try:
-            async with BleakClient(device) as client:
-                services = await client.get_services()
-                device_info['services'] = [str(service.uuid) for service in services]
-                
-                # Check for known service UUIDs
-                for device_type, config in self.known_devices.items():
-                    if config['service_uuid'] in device_info['services']:
-                        device_info.update({
-                            'type': config['type'],
-                            'vendor': config['vendor'],
-                            'pairable': True
-                        })
-                        break
+            # For discovery mode, do a quick battery check with longer timeout for BT50
+            if hasattr(self, 'scanning') and self.scanning:
+                # Fast discovery mode - battery read with adequate timeout for WitMotion
+                try:
+                    # Use 6 seconds for BT50 devices, 3 for others
+                    timeout = 6.0 if 'BT50' in device.name else 3.0
+                    async with BleakClient(device, timeout=timeout) as client:
+                        logger.debug(f"Quick battery check for {device.address} (timeout: {timeout}s)")
                         
+                        # Quick battery read only - this will use the WitMotion protocol for BT50s
+                        battery_level = await self._read_battery_level(client)
+                        if battery_level is not None:
+                            device_info['battery'] = battery_level
+                            logger.info(f"✅ Device {device.address} battery: {battery_level}%")
+                        else:
+                            logger.debug(f"No battery reading available for {device.address}")
+                        
+                        device_info['connection_status'] = 'reachable'
+                        
+                except (asyncio.TimeoutError, Exception) as e:
+                    # If quick battery read fails, continue without it
+                    logger.debug(f"Battery read timeout for {device.address}: {e}")
+                    device_info['connection_status'] = 'discoverable'
+                    device_info['battery'] = None
+            else:
+                # Detailed analysis mode (non-discovery)
+                async with BleakClient(device, timeout=5.0) as client:
+                    logger.debug(f"Connected to {device.address} for detailed analysis")
+                    
+                    # Get services
+                    services = await client.get_services()
+                    device_info['services'] = [str(service.uuid) for service in services]
+                    
+                    # Check for known service UUIDs
+                    for device_type, config in self.known_devices.items():
+                        if config['service_uuid'] in device_info['services']:
+                            device_info.update({
+                                'type': config['type'],
+                                'vendor': config['vendor'],
+                                'pairable': True
+                            })
+                            break
+                    
+                    # Try to read battery level
+                    battery_level = await self._read_battery_level(client)
+                    if battery_level is not None:
+                        device_info['battery'] = battery_level
+                        logger.info(f"Device {device.address} battery: {battery_level}%")
+                    else:
+                        device_info['battery'] = None
+                        logger.debug(f"No battery service found on {device.address}")
+                    
+                    # Update RSSI from connected client if available
+                    if hasattr(client, 'rssi') and client.rssi:
+                        device_info['rssi'] = client.rssi
+                    
+                    # Mark as connected successfully
+                    device_info['connection_status'] = 'reachable'
+                    logger.debug(f"Successfully analyzed device {device.address}")
+                        
+        except asyncio.TimeoutError:
+            logger.debug(f"Connection timeout for {device.address}")
+            device_info['battery'] = None
+            device_info['connection_status'] = 'timeout'
         except Exception as e:
             logger.debug(f"Could not analyze services for {device.address}: {e}")
+            device_info['battery'] = None
+            device_info['connection_status'] = 'unreachable'
         
         return device_info
+    
+    async def _read_battery_level(self, client: BleakClient) -> Optional[int]:
+        """Read battery level from BLE device (supports both standard BLE and WitMotion BT50)"""
+        # Standard Battery Service UUID
+        BATTERY_SERVICE_UUID = "0000180f-0000-1000-8000-00805f9b34fb"
+        BATTERY_LEVEL_CHAR_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
+        
+        # WitMotion BT50 specific UUIDs
+        WITMOTION_SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb"
+        WITMOTION_CONFIG_UUID = "0000ffe9-0000-1000-8000-00805f9a34fb"
+        WITMOTION_DATA_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb"
+        
+        try:
+            # Method 1: Try standard battery service first
+            try:
+                services = await client.get_services()
+                for service in services:
+                    if str(service.uuid).lower() == BATTERY_SERVICE_UUID.lower():
+                        battery_data = await client.read_gatt_char(BATTERY_LEVEL_CHAR_UUID)
+                        if battery_data and len(battery_data) > 0:
+                            battery_level = int(battery_data[0])
+                            logger.debug(f"Standard battery service: {battery_level}% from {client.address}")
+                            return battery_level
+            except Exception as e:
+                logger.debug(f"Standard battery service failed for {client.address}: {e}")
+            
+            # Method 2: Check if this is a WitMotion BT50 device and use custom protocol
+            try:
+                services = await client.get_services()
+                has_witmotion_service = any(str(service.uuid).lower() == WITMOTION_SERVICE_UUID.lower() 
+                                          for service in services)
+                
+                if has_witmotion_service:
+                    logger.debug(f"Detected WitMotion device {client.address}, trying custom battery protocol")
+                    battery_level = await self._read_witmotion_battery(client, WITMOTION_CONFIG_UUID, WITMOTION_DATA_UUID)
+                    if battery_level is not None:
+                        return battery_level
+                        
+            except Exception as e:
+                logger.debug(f"WitMotion battery read failed for {client.address}: {e}")
+                
+            # Method 3: Try to find battery characteristic by scanning all characteristics  
+            try:
+                services = await client.get_services()
+                for service in services:
+                    for characteristic in service.characteristics:
+                        if ("battery" in characteristic.description.lower() or 
+                            "2a19" in str(characteristic.uuid).lower()):
+                            try:
+                                battery_data = await client.read_gatt_char(characteristic.uuid)
+                                if battery_data and len(battery_data) > 0:
+                                    battery_level = int(battery_data[0])
+                                    logger.debug(f"Alt battery method: {battery_level}% from {client.address}")
+                                    return battery_level
+                            except Exception as alt_e:
+                                logger.debug(f"Alt battery read failed for {client.address}: {alt_e}")
+                                continue
+                                
+            except Exception as e:
+                logger.debug(f"Alternative battery scan failed for {client.address}: {e}")
+                        
+        except Exception as e:
+            logger.debug(f"Battery level read failed for {client.address}: {e}")
+        
+        return None
+
+    async def _read_witmotion_battery(self, client: BleakClient, config_uuid: str, data_uuid: str) -> Optional[int]:
+        """Read battery level from WitMotion BT50 using custom protocol"""
+        battery_response = None
+        notification_received = asyncio.Event()
+        
+        def notification_handler(sender, data):
+            nonlocal battery_response
+            logger.debug(f"WitMotion notification from {sender}: {data.hex()}")
+            
+            # Parse multi-frame notifications to find battery data
+            offset = 0
+            while offset < len(data) - 3:
+                if data[offset] == 0x55:
+                    frame_type = data[offset + 1]
+                    if frame_type == 0x71 and offset + 5 < len(data):
+                        # Found battery/status frame: 55 71 64 00 [voltage_low] [voltage_high] ...
+                        if data[offset + 2] == 0x64 and data[offset + 3] == 0x00:
+                            battery_response = data[offset:offset + 20]  # Extract this frame
+                            notification_received.set()
+                            logger.debug(f"WitMotion battery frame found: {battery_response.hex()}")
+                            return
+                    elif frame_type == 0x64 and offset + 5 < len(data):
+                        # Original format: 55 64 [voltage_low] [voltage_high]
+                        battery_response = data[offset:offset + 20]
+                        notification_received.set()
+                        logger.debug(f"WitMotion battery response received: {battery_response.hex()}")
+                        return
+                offset += 1
+        
+        try:
+            # Enable notifications on the data characteristic
+            await client.start_notify(data_uuid, notification_handler)
+            logger.debug(f"WitMotion notifications enabled on {data_uuid}")
+            
+            # Send battery voltage query command
+            battery_cmd = bytes([0xFF, 0xAA, 0x27, 0x64, 0x00])  # Get battery voltage
+            logger.debug(f"Sending WitMotion battery command: {battery_cmd.hex()}")
+            await client.write_gatt_char(config_uuid, battery_cmd)
+            
+            # Wait for response (up to 2 seconds for device manager context)
+            try:
+                await asyncio.wait_for(notification_received.wait(), timeout=2.0)
+                
+                if battery_response and len(battery_response) >= 6:
+                    # Parse WitMotion battery response
+                    if battery_response[0] == 0x55 and battery_response[1] == 0x71:
+                        # Format: 0x55 0x71 0x64 0x00 [voltage_low] [voltage_high] ...
+                        voltage_raw = int.from_bytes(battery_response[4:6], byteorder='little', signed=False)
+                        voltage_v = voltage_raw / 100.0  # Convert to volts
+                        
+                        # Convert voltage to battery percentage
+                        # WitMotion BT50 typical range: 3.0V (0%) to 4.2V (100%)
+                        min_voltage = 3.0
+                        max_voltage = 4.2
+                        battery_pct = int(((voltage_v - min_voltage) / (max_voltage - min_voltage)) * 100)
+                        battery_pct = max(0, min(100, battery_pct))  # Clamp to 0-100%
+                        
+                        logger.debug(f"WitMotion battery: {battery_pct}% ({voltage_v:.2f}V) from {client.address}")
+                        return battery_pct
+                    elif battery_response[0] == 0x55 and battery_response[1] == 0x64:
+                        # Original format: 0x55 0x64 [voltage_low] [voltage_high] [checksum]
+                        voltage_raw = int.from_bytes(battery_response[2:4], byteorder='little', signed=False)
+                        voltage_v = voltage_raw / 100.0  # Convert to volts
+                        
+                        min_voltage = 3.0
+                        max_voltage = 4.2
+                        battery_pct = int(((voltage_v - min_voltage) / (max_voltage - min_voltage)) * 100)
+                        battery_pct = max(0, min(100, battery_pct))  # Clamp to 0-100%
+                        
+                        logger.debug(f"WitMotion battery: {battery_pct}% ({voltage_v:.2f}V) from {client.address}")
+                        return battery_pct
+                else:
+                    logger.debug(f"WitMotion invalid or missing battery response from {client.address}")
+                    
+            except asyncio.TimeoutError:
+                logger.debug(f"WitMotion battery query timeout from {client.address}")
+                
+            finally:
+                # Clean up notifications
+                await client.stop_notify(data_uuid)
+                
+        except Exception as e:
+            logger.debug(f"WitMotion battery read failed for {client.address}: {e}")
+        
+        return None
     
     def _is_relevant_device(self, device_info: Dict[str, Any]) -> bool:
         """Check if device is relevant for shooting sports (BT50 sensors or AMG timers)"""
@@ -200,13 +429,13 @@ class DeviceManager:
         
         device_info = self.discovered_devices[mac_address]
         
-        # Get current Bridge
-        current_bridge = self.get_current_bridge()
-        if not current_bridge:
-            raise ValueError("No Bridge configured - cannot pair devices")
-        
-        # Check if device is already paired
+        # Check if device is already paired and create if needed
         with get_database_session() as session:
+            # Get current Bridge within this session
+            current_bridge = session.query(Bridge).first()
+            if not current_bridge:
+                raise ValueError("No Bridge configured - cannot pair devices")
+            
             existing_sensor = SensorCRUD.get_by_hw_addr(session, mac_address)
             if existing_sensor:
                 # Update Bridge ownership if not set
@@ -359,6 +588,84 @@ class DeviceManager:
                 'battery': battery,
                 'rssi': rssi
             }
+
+    async def refresh_device_battery(self, mac_address: str) -> Optional[int]:
+        """Connect to device and read current battery level"""
+        logger.info(f"Refreshing battery level for device {mac_address}")
+        
+        try:
+            # Connect to device and read battery
+            async with BleakClient(mac_address, timeout=10.0) as client:
+                logger.debug(f"Connected to {mac_address} for battery refresh")
+                battery_level = await self._read_battery_level(client)
+                
+                if battery_level is not None:
+                    logger.info(f"Battery refresh successful: {mac_address} = {battery_level}%")
+                else:
+                    logger.warning(f"Battery refresh returned None for {mac_address}")
+                    
+                return battery_level
+                
+        except asyncio.TimeoutError:
+            logger.warning(f"Battery refresh timeout for {mac_address}")
+            return None
+        except Exception as e:
+            logger.error(f"Battery refresh failed for {mac_address}: {e}")
+            return None
+
+    async def refresh_all_device_batteries(self) -> List[Dict[str, Any]]:
+        """Refresh battery status for all paired devices"""
+        logger.info("Starting batch battery refresh for all paired devices")
+        
+        # Get all paired devices
+        devices = self.get_paired_devices()
+        results = []
+        
+        for device in devices:
+            mac_address = device['address']
+            logger.debug(f"Refreshing battery for {device['label']} ({mac_address})")
+            
+            try:
+                battery_level = await self.refresh_device_battery(mac_address)
+                
+                if battery_level is not None:
+                    # Update device health with new battery reading
+                    await self.update_device_health(mac_address, battery=battery_level)
+                    results.append({
+                        "mac_address": mac_address,
+                        "label": device['label'],
+                        "status": "success",
+                        "battery": battery_level
+                    })
+                    logger.info(f"✅ Battery updated: {device['label']} = {battery_level}%")
+                else:
+                    results.append({
+                        "mac_address": mac_address,
+                        "label": device['label'],
+                        "status": "failed",
+                        "battery": None,
+                        "error": "Could not read battery level"
+                    })
+                    logger.warning(f"❌ Battery refresh failed: {device['label']}")
+                    
+            except Exception as e:
+                results.append({
+                    "mac_address": mac_address,
+                    "label": device['label'],
+                    "status": "failed",
+                    "battery": None,
+                    "error": str(e)
+                })
+                logger.error(f"❌ Battery refresh error for {device['label']}: {e}")
+                
+            # Add delay between devices to avoid BLE conflicts
+            await asyncio.sleep(1)
+        
+        successful = len([r for r in results if r["status"] == "success"])
+        total = len(results)
+        logger.info(f"Batch battery refresh complete: {successful}/{total} successful")
+        
+        return results
     
     async def remove_device(self, sensor_id: int) -> Dict[str, Any]:
         """Remove a paired device"""

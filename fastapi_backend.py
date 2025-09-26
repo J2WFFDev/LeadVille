@@ -609,13 +609,7 @@ async def pair_device(request: Request):
 
 @app.post("/api/admin/devices/{sensor_id}/assign")
 async def assign_device_to_target(sensor_id: int, request: Request):
-    """
-    [DEPRECATED] Assign a device to a target
-    
-    This endpoint is deprecated. Use the Device Pool system instead:
-    - POST /api/admin/pool/sessions/{session_id}/lease
-    """
-    logger.warning("DEPRECATED: /api/admin/devices/{sensor_id}/assign endpoint called. Use Device Pool system instead.")
+    """Assign a device to a target"""
     try:
         data = await request.json()
         target_id = data.get("target_id")
@@ -644,13 +638,7 @@ async def assign_device_to_target(sensor_id: int, request: Request):
 
 @app.post("/api/admin/devices/{sensor_id}/unassign")
 async def unassign_device(sensor_id: int):
-    """
-    [DEPRECATED] Remove device assignment from target
-    
-    This endpoint is deprecated. Use the Device Pool system instead:
-    - POST /api/admin/pool/sessions/{session_id}/release/{device_id}
-    """
-    logger.warning("DEPRECATED: /api/admin/devices/{sensor_id}/unassign endpoint called. Use Device Pool system instead.")
+    """Remove device assignment from target"""
     try:
         from src.impact_bridge.device_manager import device_manager
         result = await device_manager.unassign_device(sensor_id)
@@ -692,104 +680,6 @@ async def update_device_health(mac_address: str, request: Request):
             status_code=500
         )
 
-@app.post("/api/admin/devices/{mac_address}/refresh_battery")
-async def refresh_device_battery(mac_address: str):
-    """Refresh battery status for a specific device by connecting and reading current level"""
-    try:
-        from src.impact_bridge.device_manager import device_manager
-        battery_level = await device_manager.refresh_device_battery(mac_address)
-        
-        if battery_level is not None:
-            # Update the device health with new battery reading
-            await device_manager.update_device_health(mac_address, battery=battery_level)
-            return JSONResponse(content={
-                "status": "success",
-                "battery": battery_level,
-                "message": f"Battery level refreshed: {battery_level}%"
-            })
-        else:
-            return JSONResponse(content={
-                "status": "failed",
-                "battery": None,
-                "message": "Could not read battery level"
-            }, status_code=422)
-            
-    except ValueError as e:
-        return JSONResponse(
-            content={"error": str(e)},
-            status_code=404
-        )
-    except Exception as e:
-        logger.error(f"Error refreshing battery for {mac_address}: {e}")
-        return JSONResponse(
-            content={"error": f"Battery refresh failed: {str(e)}"},
-            status_code=500
-        )
-
-@app.post("/api/admin/devices/refresh_all_batteries")
-async def refresh_all_device_batteries():
-    """Refresh battery status for all paired BT50 devices using external service"""
-    try:
-        import subprocess
-        import os
-        
-        # Run the battery refresh service
-        script_path = "/home/jrwest/projects/LeadVille/tools/battery_refresh_service.py"
-        if not os.path.exists(script_path):
-            return JSONResponse(
-                content={"error": "Battery refresh service not found"},
-                status_code=500
-            )
-        
-        result = subprocess.run([
-            'python3', script_path
-        ], cwd='/home/jrwest/projects/LeadVille/tools',
-           capture_output=True, text=True, timeout=60)
-        
-        if result.returncode == 0:
-            # Parse the output to extract success count
-            output_lines = result.stdout.strip().split('\n')
-            summary_line = [line for line in output_lines if 'Batch complete:' in line]
-            
-            if summary_line:
-                # Extract numbers from "✅ Batch complete: 1/3 devices updated"
-                summary = summary_line[0]
-                try:
-                    numbers = summary.split(':')[1].strip().split('/')[0].strip().split()[0]
-                    successful = int(numbers)
-                except:
-                    successful = 0
-            else:
-                successful = 0
-                
-            return JSONResponse(content={
-                "status": "completed",
-                "successful_updates": successful,
-                "output": result.stdout,
-                "message": "Battery refresh completed"
-            })
-        else:
-            return JSONResponse(
-                content={
-                    "status": "error", 
-                    "error": result.stderr,
-                    "output": result.stdout
-                },
-                status_code=500
-            )
-        
-    except subprocess.TimeoutExpired:
-        return JSONResponse(
-            content={"error": "Battery refresh timed out"},
-            status_code=408
-        )
-    except Exception as e:
-        logger.error(f"Error running battery refresh: {e}")
-        return JSONResponse(
-            content={"error": f"Battery refresh failed: {str(e)}"},
-            status_code=500
-        )
-
 @app.delete("/api/admin/devices/{sensor_id}")
 async def remove_device(sensor_id: int):
     """Remove a paired device"""
@@ -812,13 +702,7 @@ async def remove_device(sensor_id: int):
 
 @app.get("/api/admin/devices/assignments")
 def get_device_assignments():
-    """
-    [DEPRECATED] Get current device-to-target assignments
-    
-    This endpoint is deprecated. Use the Device Pool system instead:
-    - GET /api/admin/pool/sessions/{session_id}/devices
-    """
-    logger.warning("DEPRECATED: /api/admin/devices/assignments endpoint called. Use Device Pool system instead.")
+    """Get current device-to-target assignments"""
     try:
         from src.impact_bridge.device_manager import device_manager
         assignments = device_manager.get_device_assignments()
@@ -876,66 +760,6 @@ def get_node_info():
     except Exception as e:
         return JSONResponse(
             content={"error": f"Failed to get node info: {str(e)}"},
-            status_code=500
-        )
-
-@app.get("/api/admin/bridge/config")
-async def get_bridge_config():
-    """Get the current bridge device configuration"""
-    try:
-        import json
-        from pathlib import Path
-        
-        config_file = Path("bridge_device_config.json")
-        
-        if not config_file.exists():
-            return JSONResponse(
-                content={"error": "Bridge config file not found"},
-                status_code=404
-            )
-        
-        with open(config_file, 'r') as f:
-            config_data = json.load(f)
-        
-        # Enhance with device status information
-        timer = config_data.get("timer")
-        sensors = config_data.get("sensors", [])
-        
-        # Get paired device information for status
-        from src.impact_bridge.device_manager import device_manager
-        paired_devices = device_manager.get_paired_devices()
-        device_lookup = {device['address']: device for device in paired_devices}
-        
-        # Build enriched response
-        response = {
-            "timer": {
-                "address": timer,
-                "status": "configured" if timer else "not_configured",
-                "device_info": device_lookup.get(timer) if timer else None
-            },
-            "sensors": []
-        }
-        
-        for sensor_addr in sensors:
-            sensor_info = {
-                "address": sensor_addr,
-                "device_info": device_lookup.get(sensor_addr),
-                "status": "paired" if sensor_addr in device_lookup else "not_paired"
-            }
-            response["sensors"].append(sensor_info)
-        
-        response["summary"] = {
-            "timer_configured": bool(timer),
-            "sensors_count": len(sensors),
-            "sensors_paired": len([s for s in sensors if s in device_lookup])
-        }
-        
-        return JSONResponse(content=response)
-        
-    except Exception as e:
-        logger.error(f"Failed to get bridge config: {e}")
-        return JSONResponse(
-            content={"error": f"Failed to get bridge config: {str(e)}"},
             status_code=500
         )
 
@@ -1061,6 +885,22 @@ def get_stage_details(stage_id: int):
         from .database.models import StageConfig, TargetConfig, Sensor
         from .database.database import get_database_session
         from sqlalchemy.orm import joinedload
+        import json
+        from pathlib import Path
+        
+        # FIRST: Load bridge device config to get actual sensor assignments
+        bridge_sensors = []
+        try:
+            config_file = Path("bridge_device_config.json")
+            if config_file.exists():
+                with open(config_file, 'r') as f:
+                    bridge_config = json.load(f)
+                bridge_sensors = bridge_config.get("sensors", [])
+                logger.info(f"Stage API: Loaded {len(bridge_sensors)} sensors from bridge config")
+            else:
+                logger.warning("Stage API: Bridge config file not found, no sensors will be shown")
+        except Exception as e:
+            logger.error(f"Stage API: Failed to read bridge config: {e}")
         
         with get_database_session() as session:
             stage = session.query(StageConfig).options(
@@ -1074,48 +914,56 @@ def get_stage_details(stage_id: int):
                     status_code=404
                 )
             
-            # Get target config IDs for this stage
-            target_config_ids = [target.id for target in stage.target_configs]
-            
-            # Get sensors assigned to any target in this stage
-            assigned_sensors = session.query(Sensor).filter(
-                Sensor.target_config_id.in_(target_config_ids)
-            ).all()
-            sensor_assignments = {sensor.target_config_id: sensor for sensor in assigned_sensors}
+            # Build target list with bridge config sensors
+            targets = []
+            for target in sorted(stage.target_configs, key=lambda t: t.target_number):
+                # For stage 1 (SASP Exclamation), map bridge sensors to first two targets
+                sensor_data = None
+                if stage_id == 1 and len(bridge_sensors) > 0:  # SASP Exclamation
+                    if target.target_number == 1 and len(bridge_sensors) >= 1:
+                        sensor_data = {
+                            "id": 2,  # Legacy ID for compatibility
+                            "hw_addr": bridge_sensors[0],
+                            "label": f"BT50 Target {target.target_number}",
+                            "last_seen": None,
+                            "battery": None,
+                            "rssi": None
+                        }
+                    elif target.target_number == 2 and len(bridge_sensors) >= 2:
+                        sensor_data = {
+                            "id": 3,  # Legacy ID for compatibility
+                            "hw_addr": bridge_sensors[1],
+                            "label": f"BT50 Target {target.target_number}",
+                            "last_seen": None,
+                            "battery": None,
+                            "rssi": None
+                        }
+                
+                targets.append({
+                    "id": target.id,
+                    "target_number": target.target_number,
+                    "shape": target.shape,
+                    "type": target.type,
+                    "category": target.category,
+                    "distance_feet": target.distance_feet,
+                    "offset_feet": target.offset_feet,
+                    "height_feet": target.height_feet,
+                    "sensor": sensor_data
+                })
             
             return JSONResponse(content={
-            "stage": {
-                "id": stage.id,
-                "name": stage.name,
-                "description": stage.description,
-                "league": {
-                    "id": stage.league.id,
-                    "name": stage.league.name,
-                    "abbreviation": stage.league.abbreviation
-                },
-                "targets": [
-                    {
-                        "id": target.id,
-                        "target_number": target.target_number,
-                        "shape": target.shape,
-                        "type": target.type,
-                        "category": target.category,
-                        "distance_feet": target.distance_feet,
-                        "offset_feet": target.offset_feet,
-                        "height_feet": target.height_feet,
-                        "sensor": {
-                            "id": sensor_assignments[target.id].id,
-                            "hw_addr": sensor_assignments[target.id].hw_addr,
-                            "label": sensor_assignments[target.id].label,
-                            "last_seen": sensor_assignments[target.id].last_seen.isoformat() if sensor_assignments[target.id].last_seen else None,
-                            "battery": sensor_assignments[target.id].battery,
-                            "rssi": sensor_assignments[target.id].rssi
-                        } if target.id in sensor_assignments else None
-                    }
-                    for target in sorted(stage.target_configs, key=lambda t: t.target_number)
-                ]
-            }
-        })
+                "stage": {
+                    "id": stage.id,
+                    "name": stage.name,
+                    "description": stage.description,
+                    "league": {
+                        "id": stage.league.id,
+                        "name": stage.league.name,
+                        "abbreviation": stage.league.abbreviation
+                    },
+                    "targets": targets
+                }
+            })
     except Exception as e:
         logger.error(f"Failed to get stage details: {e}")
         return JSONResponse(
@@ -1125,14 +973,6 @@ def get_stage_details(stage_id: int):
 
 @app.post("/api/admin/stages/{stage_id}/assign_sensor")
 def assign_sensor_to_target(stage_id: int, request: dict):
-    """
-    [DEPRECATED] Assign a sensor to a target within a stage
-    
-    This endpoint is deprecated. Use the Device Pool system instead:
-    - POST /api/admin/pool/sessions to create a session
-    - POST /api/admin/pool/sessions/{session_id}/lease to lease devices
-    """
-    logger.warning("DEPRECATED: /api/admin/stages/{stage_id}/assign_sensor endpoint called. Use Device Pool system instead.")
     """Assign a sensor to a specific target in a stage"""
     try:
         from .database.models import StageConfig, TargetConfig, Sensor
@@ -1209,13 +1049,6 @@ def assign_sensor_to_target(stage_id: int, request: dict):
 
 @app.post("/api/admin/stages/{stage_id}/unassign_sensor")
 def unassign_sensor_from_target(stage_id: int, request: dict):
-    """
-    [DEPRECATED] Remove sensor assignment from a target within a stage
-    
-    This endpoint is deprecated. Use the Device Pool system instead:
-    - POST /api/admin/pool/sessions/{session_id}/release/{device_id}
-    """
-    logger.warning("DEPRECATED: /api/admin/stages/{stage_id}/unassign_sensor endpoint called. Use Device Pool system instead.")
     """Remove sensor assignment from a target"""
     try:
         from .database.models import TargetConfig, Sensor
@@ -1426,6 +1259,136 @@ def assign_bridge_to_stage(request: dict):
         logger.error(f"Failed to assign Bridge to stage: {e}")
         return JSONResponse(
             content={"error": f"Failed to assign Bridge to stage: {str(e)}"},
+            status_code=500
+        )
+
+# Bridge Configuration Management Endpoints
+
+@app.post("/api/admin/bridge/update_config")
+async def update_bridge_config(config: dict):
+    """Update the bridge device configuration file"""
+    try:
+        import json
+        from pathlib import Path
+        
+        # Path to the bridge config file
+        config_file = Path("bridge_device_config.json")
+        
+        # Validate the config structure
+        if "timer" not in config or "sensors" not in config:
+            return JSONResponse(
+                content={"error": "Config must contain 'timer' and 'sensors' keys"},
+                status_code=400
+            )
+        
+        # Validate sensors is a list
+        if not isinstance(config["sensors"], list):
+            return JSONResponse(
+                content={"error": "Sensors must be a list"},
+                status_code=400
+            )
+        
+        # Write the config file
+        with open(config_file, 'w') as f:
+            json.dump(config, f, indent=2)
+        
+        logging.info(f"Bridge config updated: timer={config['timer']}, sensors={len(config['sensors'])} devices")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Bridge config updated with {len(config['sensors'])} sensor(s)",
+            "config": config
+        })
+        
+    except Exception as e:
+        logging.error(f"Failed to update bridge config: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to update bridge config: {str(e)}"},
+            status_code=500
+        )
+
+@app.post("/api/admin/bridge/restart")
+async def restart_bridge_service():
+    """Restart the bridge service to reload configuration"""
+    try:
+        import subprocess
+        
+        logging.info("Attempting to restart leadville-bridge service")
+        
+        # Restart the systemd service
+        result = subprocess.run(
+            ["sudo", "systemctl", "restart", "leadville-bridge"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            logging.info("Bridge service restart initiated successfully")
+            return JSONResponse(content={
+                "status": "success",
+                "message": "Bridge service restart initiated",
+                "stdout": result.stdout,
+                "stderr": result.stderr
+            })
+        else:
+            logging.error(f"Failed to restart bridge service: {result.stderr}")
+            return JSONResponse(
+                content={
+                    "error": "Failed to restart bridge service",
+                    "stdout": result.stdout,
+                    "stderr": result.stderr
+                },
+                status_code=500
+            )
+        
+    except subprocess.TimeoutExpired:
+        logging.error("Bridge service restart timed out")
+        return JSONResponse(
+            content={"error": "Bridge service restart timed out"},
+            status_code=500
+        )
+    except Exception as e:
+        logging.error(f"Error restarting bridge service: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to restart bridge service: {str(e)}"},
+            status_code=500
+        )
+
+@app.get("/api/admin/bridge/config")
+async def get_bridge_config():
+    """Get the current bridge device configuration"""
+    try:
+        import json
+        from pathlib import Path
+        
+        config_file = Path("bridge_device_config.json")
+        
+        if not config_file.exists():
+            # Return default config
+            default_config = {
+                "timer": "60:09:C3:1F:DC:1A",
+                "sensors": ["EA:18:3D:6D:BA:E5", "C2:1B:DB:F0:55:50"]
+            }
+            return JSONResponse(content={
+                "status": "default",
+                "config": default_config,
+                "message": "Using default configuration (file not found)"
+            })
+        
+        with open(config_file, 'r') as f:
+            config = json.load(f)
+        
+        return JSONResponse(content={
+            "status": "loaded",
+            "config": config,
+            "message": "Configuration loaded from file"
+        })
+        
+    except Exception as e:
+        logging.error(f"Failed to get bridge config: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get bridge config: {str(e)}"},
             status_code=500
         )
 

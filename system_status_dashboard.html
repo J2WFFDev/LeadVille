@@ -140,6 +140,15 @@
                         <button onclick="discoverDevices()" id="discover-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                             🔍 Discover Devices
                         </button>
+                        <button onclick="simpleForceDiscovery()" id="simple-force-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                            ⚡ Force Find All
+                        </button>
+                        <button onclick="resetDiscoveryOnly()" id="reset-only-btn" class="px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
+                            🔧 Reset Discovery
+                        </button>
+                        <button onclick="refreshSignalStrength()" id="refresh-signal-btn" class="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors" title="Update signal strength for paired devices">
+                            📡 Refresh Signals
+                        </button>
                         <button onclick="cancelDiscovery()" id="cancel-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" style="display: none;">
                             ❌ Cancel
                         </button>
@@ -671,8 +680,11 @@
         // Enhanced Device Pool Management Functions
         async function loadDevicePool() {
             try {
+                console.log('Device pool loading...');
+                
                 // Load paired devices
                 const pairedData = await fetchJSON(`${API_BASE}/api/admin/devices`);
+                console.log('Device pool loaded successfully');
                 displayPairedDevices(pairedData?.devices || []);
                 
                 // Check if we should show empty state
@@ -685,8 +697,19 @@
         }
 
         function displayPairedDevices(devices) {
+            console.log('displayPairedDevices called with:', devices);
             const pairedDevicesEl = document.getElementById('paired-devices');
             const pairedCountEl = document.getElementById('paired-count');
+            
+            // Add null checks to prevent errors
+            if (!pairedDevicesEl) {
+                console.error('paired-devices element not found');
+                return;
+            }
+            if (!pairedCountEl) {
+                console.error('paired-count element not found');
+                return;
+            }
             
             pairedCountEl.textContent = `(${devices.length})`;
             
@@ -700,32 +723,87 @@
                 return;
             }
 
-            pairedDevicesEl.innerHTML = devices.map(device => `
-                <div class="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                    <div class="flex items-center space-x-3">
-                        <div class="text-2xl">📡</div>
-                        <div>
-                            <div class="font-medium">${device.label || 'Unknown Device'}</div>
-                            <div class="text-sm text-gray-600">${device.hw_addr}</div>
-                            <div class="text-xs text-gray-500">ID: ${device.id}</div>
+            pairedDevicesEl.innerHTML = devices.map(device => {
+                console.log('Processing device:', device);
+                
+                // Status mapping
+                const statusMap = {
+                    'never_connected': {icon: '⚪', text: 'Never Connected', color: 'text-gray-600'},
+                    'offline': {icon: '⚪', text: 'Never Connected', color: 'text-gray-600'},
+                    'online': {icon: '🟢', text: 'Connected', color: 'text-green-600'},
+                    'error': {icon: '🔴', text: 'Error', color: 'text-red-600'}
+                };
+                
+                const status = statusMap[device.status] || statusMap['offline'];
+                console.log('Device status mapping:', device.status, '->', status);
+                
+                // Battery display
+                const batteryDisplay = device.battery ? `${device.battery}% 🔋` : 'Unknown ❓';
+                console.log('Battery:', device.battery, '->', batteryDisplay);
+                
+                // RSSI display  
+                const rssiDisplay = device.rssi ? `${device.rssi} dBm` : 'N/A ❓';
+                console.log('RSSI:', device.rssi, '->', rssiDisplay);
+                
+                // Target assignment
+                const targetDisplay = device.target_id ? `🎯 Target ${device.target_id}` : '🎯 Unassigned';
+                console.log('Target assignment:', device.target_id, '->', targetDisplay);
+                
+                return `
+                    <div class="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <div class="flex items-center space-x-3">
+                            <div class="text-2xl">📡</div>
+                            <div>
+                                <div class="font-medium">${device.label || 'Unknown Device'}</div>
+                                <div class="text-sm text-gray-600">${device.address}</div>
+                                <div class="text-xs text-gray-500">ID: ${device.id} • ${device.type}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm ${status.color} font-medium mb-1">
+                                ${status.icon} ${status.text}
+                            </div>
+                            <div class="text-xs text-gray-600 mb-1">
+                                <div>Target: ${targetDisplay}</div>
+                                <div>Signal: ${rssiDisplay}</div>
+                                <div>Battery: ${batteryDisplay}</div>
+                                <div>Last Seen: ${device.last_seen ? new Date(device.last_seen).toLocaleDateString() : 'Never'}</div>
+                            </div>
+                            <button onclick="unpairDevice(${device.id}, '${device.label || device.address}')" 
+                                    class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors text-sm">
+                                🗑️ Unpair
+                            </button>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-2">
-                        <div class="text-sm text-green-600 font-medium">Paired</div>
-                        <button onclick="unpairDevice(${device.id}, '${device.label || device.hw_addr}')" 
-                                class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors text-sm">
-                            🗑️ Unpair
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function displayDiscoveredDevices(devices) {
             const discoveredDevicesEl = document.getElementById('discovered-devices');
             const discoveredCountEl = document.getElementById('discovered-count');
+            const discoverySection = document.getElementById('discovery-section');
+            
+            // Add null checks to prevent errors
+            if (!discoveredDevicesEl) {
+                console.error('discovered-devices element not found');
+                return;
+            }
+            if (!discoveredCountEl) {
+                console.error('discovered-count element not found');
+                return;
+            }
+            if (!discoverySection) {
+                console.error('discovery-section element not found');
+                return;
+            }
+            
+            // Always show the discovery section when displaying devices
+            discoverySection.style.display = 'block';
             
             discoveredCountEl.textContent = `(${devices.length})`;
+            
+            console.log(`Displaying ${devices.length} discovered devices in UI`);
             
             if (devices.length === 0) {
                 discoveredDevicesEl.innerHTML = `
@@ -1090,8 +1168,182 @@
             emptyState.style.display = hasContent ? 'none' : 'block';
         }
 
+        // Simple Force Discovery - bypasses all WebSocket complexity
+        async function simpleForceDiscovery() {
+            const btn = document.getElementById('simple-force-btn');
+            const originalText = btn.textContent;
+            
+            try {
+                btn.disabled = true;
+                btn.textContent = '⏳ Resetting...';
+                console.log('Starting force discovery...');
+                
+                // Multiple reset attempts to clear stuck state
+                console.log('Resetting discovery state (attempt 1)...');
+                await fetch(`${API_BASE}/api/admin/devices/discovery/reset`, {method: 'POST'});
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                console.log('Resetting discovery state (attempt 2)...');
+                await fetch(`${API_BASE}/api/admin/devices/discovery/reset`, {method: 'POST'});
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                btn.textContent = '⏳ Scanning...';
+                console.log('Starting direct discovery API call...');
+                
+                // Direct API call with error details
+                const response = await fetch(`${API_BASE}/api/admin/devices/discover?duration=15`, {method: 'POST'});
+                
+                console.log('Discovery response status:', response.status);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    const devices = result.discovered_devices || [];
+                    
+                    console.log('Discovery result:', result);
+                    console.log(`Found ${devices.length} devices:`, devices.map(d => d.address));
+                    
+                    if (devices.length > 0) {
+                        displayDiscoveredDevices(devices);
+                        showNotification(`✅ Found ${devices.length} device(s)!`, 'success');
+                    } else {
+                        showNotification('⚠️ No devices found - check if devices are powered on', 'warning');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    console.error('Discovery API error:', errorText);
+                    showNotification(`❌ Discovery failed: ${response.status}`, 'error');
+                    
+                    // Show error details in console
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        console.error('Error details:', errorJson);
+                    } catch (e) {
+                        console.error('Raw error:', errorText);
+                    }
+                }
+            } catch (error) {
+                console.error('Force discovery error:', error);
+                showNotification('❌ Discovery error - check console', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // Refresh Signal Strength for Paired Devices
+        async function refreshSignalStrength() {
+            const btn = document.getElementById('refresh-signal-btn');
+            const originalText = btn.textContent;
+            
+            try {
+                btn.disabled = true;
+                btn.textContent = '📡 Scanning...';
+                console.log('Refreshing signal strength for paired devices...');
+                
+                showNotification('Scanning for signal strength...', 'info');
+                
+                // First, do a discovery to get current RSSI values
+                const response = await fetch(`${API_BASE}/api/admin/devices/discover?duration=10`, {method: 'POST'});
+                
+                if (response.ok) {
+                    const discoveryData = await response.json();
+                    const discoveredDevices = discoveryData.discovered_devices || [];
+                    
+                    console.log('Found devices for RSSI update:', discoveredDevices.length);
+                    
+                    // Get current paired devices
+                    const pairedResponse = await fetch(`${API_BASE}/api/admin/devices`);
+                    if (pairedResponse.ok) {
+                        const pairedData = await pairedResponse.json();
+                        const pairedDevices = pairedData.devices || [];
+                        
+                        let updatedCount = 0;
+                        
+                        // Update RSSI for each paired device found in discovery
+                        for (const pairedDevice of pairedDevices) {
+                            const discoveredDevice = discoveredDevices.find(d => d.address === pairedDevice.address);
+                            if (discoveredDevice && discoveredDevice.rssi !== null) {
+                                try {
+                                    const updateResponse = await fetch(`${API_BASE}/api/admin/devices/${pairedDevice.address}/health`, {
+                                        method: 'PUT',
+                                        headers: {'Content-Type': 'application/json'},
+                                        body: JSON.stringify({rssi: discoveredDevice.rssi})
+                                    });
+                                    
+                                    if (updateResponse.ok) {
+                                        console.log(`Updated RSSI for ${pairedDevice.address}: ${discoveredDevice.rssi} dBm`);
+                                        updatedCount++;
+                                    }
+                                } catch (error) {
+                                    console.error(`Failed to update RSSI for ${pairedDevice.address}:`, error);
+                                }
+                            }
+                        }
+                        
+                        showNotification(`📡 Updated signal strength for ${updatedCount} device(s)`, 'success');
+                        
+                        // Refresh the device pool to show updated values
+                        await refreshDevicePool();
+                    }
+                } else {
+                    showNotification('❌ Failed to scan for signal strength', 'error');
+                }
+            } catch (error) {
+                console.error('Signal strength refresh error:', error);
+                showNotification('❌ Signal refresh error', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // Reset Discovery Only - for when discovery gets stuck
+        async function resetDiscoveryOnly() {
+            const btn = document.getElementById('reset-only-btn');
+            const originalText = btn.textContent;
+            
+            try {
+                btn.disabled = true;
+                btn.textContent = '🔄 Resetting...';
+                console.log('Resetting discovery state...');
+                
+                const response = await fetch(`${API_BASE}/api/admin/devices/discovery/reset`, {method: 'POST'});
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Reset result:', result);
+                    showNotification('✅ Discovery state reset', 'success');
+                } else {
+                    showNotification('❌ Reset failed', 'error');
+                }
+            } catch (error) {
+                console.error('Reset error:', error);
+                showNotification('❌ Reset error', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
         // Load status on page load
-        document.addEventListener('DOMContentLoaded', loadSystemStatus);
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('Page loaded, initializing...');
+            
+            // Load system status first
+            try {
+                await loadSystemStatus();
+                console.log('System status loaded successfully');
+            } catch (error) {
+                console.error('Error loading system status:', error);
+                // Still continue to load device pool even if system status fails
+            }
+            
+            // Force refresh device pool as backup
+            setTimeout(async () => {
+                console.log('Force refreshing device pool...');
+                await refreshDevicePool();
+            }, 1000);
+        });
     </script>
 </body>
 </html>
