@@ -118,12 +118,25 @@ Key tables confirmed:
 - Database tables populated with stage configurations
 - Development environment stable
 
+**⚠️ Code Synchronization Status:**
+- **Pi is the authoritative version** - contains latest working code
+- GitHub sync attempted but has merge conflicts in key files:
+  - `src/impact_bridge/device_manager.py`
+  - `src/impact_bridge/fastapi_backend.py` 
+  - `bridge_device_config.json`
+- **Recommendation:** Use Pi version for development, resolve conflicts later during cleanup phase
+
 **Priority Order for Tomorrow:**
 1. Device type expansion (SpecialPit, ESP32)
 2. Database sample collection testing  
 3. Live logging implementation
 4. UI improvements for device health
-5. Code cleanup and Pi sync
+5. Code cleanup and Pi sync (resolve GitHub conflicts)
+
+**Development Strategy:**
+- Work directly on Pi for tomorrow's session
+- Pi has all working fixes and latest device management code
+- Sync conflicts can be resolved during cleanup phase
 
 ---
-**Session Notes:** Debugging session revealed system working correctly - likely browser cache or temporary network issue. All systems validated and ready for expansion work.
+**Session Notes:** Debugging session revealed system working correctly - likely browser cache or temporary network issue. All systems validated and ready for expansion work. Pi contains authoritative working version with latest device management and API fixes.
