@@ -39,6 +39,13 @@ class DeviceManager:
                 'service_uuid': '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
                 'type': 'timer',
                 'vendor': 'AMG Labs'
+            },
+            'SpecialPie': {
+                'name_patterns': ['SpecialPie', 'SP M1A2', 'SP-M1A2', 'SPECIAL PIE'],
+                'service_uuid': '0000fff0-0000-1000-8000-00805f9b34fb',  # SpecialPie service UUID
+                'notification_uuid': '0000fff1-0000-1000-8000-00805f9b34fb',  # Notification characteristic
+                'type': 'shot_timer',
+                'vendor': 'SpecialPie'
             }
         }
     
@@ -67,14 +74,28 @@ class DeviceManager:
         
     async def discover_devices(self, duration: int = 10) -> List[Dict[str, Any]]:
         """Discover available BLE devices (filtered to BT50 sensors and AMG timers)"""
+        
+        # Force reset scanning state if stuck
         if self.scanning:
-            raise ValueError("Discovery already in progress")
+            logger.warning("Discovery already in progress - forcing reset")
+            self.scanning = False
+            await asyncio.sleep(1)
             
         self.scanning = True
         self.discovered_devices.clear()
         logger.info(f"Starting BLE device discovery for {duration} seconds...")
         
         try:
+            # Pre-emptive Bluetooth reset to ensure clean state
+            try:
+                import subprocess
+                logger.info("Pre-discovery Bluetooth reset...")
+                subprocess.run(['sudo', 'hciconfig', 'hci0', 'reset'], 
+                             capture_output=True, timeout=3)
+                await asyncio.sleep(0.5)
+            except Exception as reset_e:
+                logger.debug(f"Pre-discovery reset skipped: {reset_e}")
+            
             # Use return_adv=True to get RSSI data from advertisements
             discovered = await BleakScanner.discover(timeout=duration, return_adv=True)
             
@@ -307,6 +328,20 @@ class DeviceManager:
                                 
             except Exception as e:
                 logger.debug(f"Alternative battery scan failed for {client.address}: {e}")
+            
+            # Method 4: SpecialPie timers - currently no known battery reading method
+            try:
+                services = await client.get_services()
+                specialpie_service_uuid = "0000fff0-0000-1000-8000-00805f9b34fb"
+                has_specialpie_service = any(str(service.uuid).lower() == specialpie_service_uuid.lower() 
+                                          for service in services)
+                
+                if has_specialpie_service:
+                    logger.debug(f"Detected SpecialPie timer {client.address} - no battery reading method available yet")
+                    return None  # SpecialPie protocol doesn't include battery reading in reference implementation
+                    
+            except Exception as e:
+                logger.debug(f"SpecialPie detection failed for {client.address}: {e}")
                         
         except Exception as e:
             logger.debug(f"Battery level read failed for {client.address}: {e}")
@@ -409,25 +444,54 @@ class DeviceManager:
         if any(pattern in device_name for pattern in bt50_patterns):
             return True
         
-        # Check for AMG timers
-        amg_patterns = ['AMG', 'COMMANDER']
-        if any(pattern in device_name for pattern in amg_patterns):
+        # Check for AMG timers (improved detection logic from Denis Zhadan)
+        if self._is_amg_lab_timer(device_name):
+            return True
+        
+        # Check for SpecialPie shot timers
+        specialpie_patterns = ['SPECIALPIE', 'SP M1A2', 'SP-M1A2', 'SPECIAL PIE']
+        if any(pattern in device_name for pattern in specialpie_patterns):
             return True
         
         # Also check by device type
-        if device_type in ['accelerometer', 'timer']:
+        if device_type in ['accelerometer', 'timer', 'shot_timer']:
             return True
         
         # For debugging: log filtered out devices
         logger.debug(f"Filtered out device: {device_name} ({device_info.get('address')})")
         return False
+
+    def _is_amg_lab_timer(self, device_name: str) -> bool:
+        """
+        Enhanced AMG Lab Commander timer detection
+        Based on Denis Zhadan's improved device identification logic
+        """
+        if not device_name:
+            return False
+        
+        # Convert to uppercase for case-insensitive matching
+        upper_name = device_name.upper()
+        
+        # Denis Zhadan's detection logic: startsWith checks
+        return (upper_name.startswith("AMG LAB COMM") or 
+                upper_name.startswith("COMMANDER"))
     
     async def pair_device(self, mac_address: str, label: str) -> Dict[str, Any]:
         """Pair a discovered device and add to database with Bridge ownership"""
-        if mac_address not in self.discovered_devices:
-            raise ValueError(f"Device {mac_address} not found in discovered devices")
-        
-        device_info = self.discovered_devices[mac_address]
+        # Allow pairing even if device not in current discovery session
+        if mac_address in self.discovered_devices:
+            device_info = self.discovered_devices[mac_address]
+        else:
+            # Create basic device info for devices not in current discovery
+            logger.info(f"Pairing device {mac_address} without recent discovery - creating basic device info")
+            device_info = {
+                'address': mac_address,
+                'name': label,
+                'type': 'sensor',  # Default type
+                'vendor': 'Unknown',
+                'rssi': None,
+                'pairable': True
+            }
         
         # Check if device is already paired and create if needed
         with get_database_session() as session:
@@ -458,6 +522,34 @@ class DeviceManager:
                 last_seen=datetime.utcnow(),
                 rssi=device_info.get('rssi')
             )
+            
+            # Initialize handlers based on device type
+            device_type = device_info.get('type', 'sensor')
+            vendor = device_info.get('vendor', 'Unknown')
+            
+            if device_type == 'shot_timer' or 'SpecialPie' in vendor:
+                # Initialize SpecialPie handler for shot timers
+                try:
+                    from .specialpie_handler import specialpie_manager
+                    handler = specialpie_manager.add_timer(mac_address)
+                    logger.info(f"Initialized SpecialPie timer handler for {mac_address}")
+                    
+                    # Store device type in calibration data
+                    sensor.calib = {'device_type': 'shot_timer', 'vendor': vendor}
+                except Exception as e:
+                    logger.warning(f"Failed to initialize SpecialPie handler for {mac_address}: {e}")
+            
+            elif device_type == 'timer' or 'AMG' in vendor or 'Commander' in device_info.get('name', ''):
+                # Initialize AMG Commander handler for AMG timers
+                try:
+                    from .amg_commander_handler import amg_manager
+                    handler = amg_manager.add_timer(mac_address)
+                    logger.info(f"Initialized AMG Commander timer handler for {mac_address}")
+                    
+                    # Store device type in calibration data
+                    sensor.calib = {'device_type': 'timer', 'vendor': 'AMG Labs'}
+                except Exception as e:
+                    logger.warning(f"Failed to initialize AMG Commander handler for {mac_address}: {e}")
             
             # Assign to current Bridge
             sensor.bridge_id = current_bridge.id

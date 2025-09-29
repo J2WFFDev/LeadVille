@@ -156,6 +156,33 @@ class DevConfig:
     def is_data_export_enabled(self) -> bool:
         return self.config.get('dev_utilities', {}).get('data_export', True)
     
+    # Calibration Configuration
+    def get_calibration_timeout(self) -> int:
+        """Get calibration timeout in seconds"""
+        return self.config.get('calibration', {}).get('timeout', 30)
+    
+    def get_calibration_samples(self) -> int:
+        """Get number of calibration samples"""
+        return self.config.get('calibration', {}).get('samples', 100)
+    
+    # Shot Detection Configuration
+    def get_shot_threshold(self) -> float:
+        """Get shot detection threshold in g-force"""
+        return self.config.get('shot_detection', {}).get('threshold', 150.0)
+    
+    def get_shot_duration_range(self) -> tuple:
+        """Get shot duration range (min, max) in samples"""
+        shot_config = self.config.get('shot_detection', {})
+        return (shot_config.get('min_duration', 6), shot_config.get('max_duration', 11))
+    
+    def get_shot_interval(self) -> float:
+        """Get minimum interval between shots in seconds"""
+        return self.config.get('shot_detection', {}).get('min_interval', 1.0)
+    
+    def get_expected_delay(self) -> int:
+        """Get expected timing delay in milliseconds"""
+        return self.config.get('timing_calibration', {}).get('expected_delay_ms', 1035)
+    
     # Configuration Status
     def get_mode_description(self) -> str:
         if self.is_dev_mode:

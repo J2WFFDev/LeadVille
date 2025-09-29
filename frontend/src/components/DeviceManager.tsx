@@ -175,6 +175,23 @@ export const DeviceManager: React.FC = () => {
     }
   };
 
+  const getDeviceTypeIcon = (deviceType: string, vendor?: string): string => {
+    // SpecialPie shot timers
+    if (deviceType === 'shot_timer' || (vendor && vendor.toLowerCase().includes('specialpie'))) {
+      return '⏱️';
+    }
+    // Standard timers (AMG)
+    if (deviceType === 'timer') {
+      return '⏰';
+    }
+    // BT50 accelerometer sensors
+    if (deviceType === 'accelerometer' || deviceType === 'sensor') {
+      return '📳';
+    }
+    // Unknown devices
+    return '🔌';
+  };
+
   const getStatusText = (status: string): string => {
     switch (status) {
       case 'connected': return 'Connected';
@@ -289,9 +306,12 @@ export const DeviceManager: React.FC = () => {
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2">
-                          <span className="text-xl">{getStatusIcon(device.status)}</span>
+                          <span className="text-xl">{getDeviceTypeIcon(device.type, device.vendor)}</span>
                           <h3 className="font-medium">{device.label}</h3>
                           <span className="text-xs bg-gray-100 px-2 py-1 rounded">{device.address}</span>
+                          <span className="text-xs" title={getStatusText(device.status)}>
+                            {getStatusIcon(device.status)}
+                          </span>
                         </div>
                         <p className="text-sm text-gray-600 mt-1">{getStatusText(device.status)}</p>
                         <div className="flex space-x-4 text-xs text-gray-500 mt-2">
@@ -396,13 +416,15 @@ const DiscoveredDeviceCard: React.FC<{
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <div className="flex items-center space-x-2">
-            <span className="text-xl">{device.pairable ? '🔵' : '❓'}</span>
+            <span className="text-xl">{getDeviceTypeIcon(device.type, device.vendor)}</span>
             <h3 className="font-medium">{device.name || 'Unknown Device'}</h3>
             <span className="text-xs bg-gray-100 px-2 py-1 rounded">{device.address}</span>
+            {device.pairable && <span className="text-xs">🔵</span>}
           </div>
           <div className="flex space-x-4 text-xs text-gray-500 mt-2">
             <span>📶 {device.rssi} dBm</span>
             <span>🏷️ {device.type} ({device.vendor})</span>
+            {device.battery && <span>🔋 {device.battery}%</span>}
           </div>
           {device.pairable && (
             <div className="mt-3">

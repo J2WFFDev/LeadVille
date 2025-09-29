@@ -19,6 +19,9 @@ logs/
 *.csv
 *.ndjson
 
+# Configuration files (to prevent merge conflicts)
+config/bridge_device_config.json
+
 # SQLite runtime files
 *.db-shm
 *.db-wal

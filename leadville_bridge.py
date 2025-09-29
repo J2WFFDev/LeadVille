@@ -9,6 +9,7 @@ Provides real-time shot detection, impact correlation, and comprehensive logging
 import os
 import sys
 import time
+import json
 import asyncio
 import logging
 import statistics
@@ -104,7 +105,7 @@ AMG_TIMER_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 BT50_SENSOR_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb"
 
 # Default configuration values
-DEFAULT_IMPACT_THRESHOLD = 150  # Raw counts for impact detection
+DEFAULT_IMPACT_THRESHOLD = 25  # Raw counts for impact detection
 DEFAULT_CALIBRATION_SAMPLES = 100  # Samples for baseline calibration
 
 
@@ -131,9 +132,15 @@ class LeadVilleBridge:
             self.logger.error(f"Failed to initialize database: {e}")
         
         self.amg_client = None
-        self.bt50_client = None
+        self.bt50_clients = []  # List of all connected BT50 clients for multi-sensor support
+        self.bt50_client = None  # Keep for compatibility with single-sensor legacy code
         self.running = False
         self.session_id = int(time.time())
+        
+        # Multi-sensor calibration system
+        self.per_sensor_calibration = {}  # {sensor_mac: {"samples": [], "baseline": {}, "complete": False}}
+        self.sensor_baselines = {}  # {sensor_mac: {"baseline_x": float, "baseline_y": float, "baseline_z": float}}
+        self.sensor_target_count = 100  # Calibration samples required per sensor
         
         # Dynamic baseline values (set during calibration)
         self.baseline_x = None
@@ -260,8 +267,8 @@ class LeadVilleBridge:
     def get_bridge_assigned_devices(self):
         """Get MAC addresses of devices assigned to this Bridge"""
         try:
-            # FIRST: Try to read from bridge_device_config.json
-            config_file = Path("bridge_device_config.json")
+            # FIRST: Try to read from config/bridge_device_config.json
+            config_file = Path("config/bridge_device_config.json")
             if config_file.exists():
                 try:
                     import json
@@ -454,7 +461,358 @@ class LeadVilleBridge:
             self.logger.info("✅ Calibration completed successfully!")
             self.logger.info(f"📊 Baseline established: X={self.baseline_x:.1f}, Y={self.baseline_y:.1f}, Z={self.baseline_z:.1f}")
             self.logger.info(f"📈 Noise levels: X=±{noise_x:.3f}, Y=±{noise_y:.3f}, Z=±{noise_z:.3f}")
-            self.logger.info(f"🎯 Impact threshold: 150 counts from baseline")
+            self.logger.info(f"🎯 Impact threshold: 25 counts from baseline")
+            
+            # Reset enhanced impact detector to clear any residual state
+            if self.enhanced_impact_detector:
+                self.enhanced_impact_detector.reset()
+            
+            # Switch to normal notification handler
+            await self.bt50_client.stop_notify(BT50_SENSOR_UUID)
+            await self.bt50_client.start_notify(BT50_SENSOR_UUID, self.bt50_notification_handler)
+            
+            self.logger.info("📝 Status: Sensor 12:E3 - Listening")
+            self.logger.info("BT50 sensor and impact notifications enabled")
+            self.logger.info("-----------------------------🎯Bridge ready for String🎯-----------------------------")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Calibration failed: {e}")
+            return False
+            
+    async def perform_multi_sensor_calibration(self):
+        """Perform automatic startup calibration for multiple BT50 sensors"""
+        self.logger.info("🎯 Starting multi-sensor automatic calibration...")
+        self.logger.info(f"Calibration: {self.sensor_target_count} samples per sensor, auto=True")
+        self.logger.info("================================")
+        print("🎯 Performing multi-sensor startup calibration...")
+        print("📋 Please ensure ALL sensors are STATIONARY during calibration")
+        print(f"⏱️  Collecting {self.sensor_target_count} samples from {len(self.bt50_clients)} sensors...")
+        
+        # Reset multi-sensor calibration state
+        self.per_sensor_calibration = {}
+        self.sensor_baselines = {}
+        self.collecting_calibration = True
+        
+        # Initialize calibration storage for each connected sensor
+        connected_sensor_macs = []
+        for i, client in enumerate(self.bt50_clients):
+            # Get sensor MAC from the client
+            sensor_mac = client.address
+            connected_sensor_macs.append(sensor_mac)
+            
+            self.per_sensor_calibration[sensor_mac] = {
+                "samples": [],
+                "baseline": {},
+                "complete": False,
+                "target_samples": self.sensor_target_count
+            }
+        
+        try:
+            # Start calibration notifications on all connected sensors with individual handlers
+            for i, client in enumerate(self.bt50_clients):
+                sensor_mac = client.address
+                # Create a closure to capture the sensor_mac for each handler
+                def create_calibration_handler(mac):
+                    async def handler(characteristic, data):
+                        await self.sensor_specific_calibration_handler(mac, data)
+                    return handler
+                
+                handler = create_calibration_handler(sensor_mac)
+                await client.start_notify(BT50_SENSOR_UUID, handler)
+            
+            self.logger.debug(f"Calibration notifications enabled on {len(self.bt50_clients)} sensors")
+            
+            # Wait for calibration to complete on all sensors
+            start_time = time.time()
+            timeout = dev_config.get_calibration_timeout() if COMPONENTS_AVAILABLE else 60  # Longer timeout for multiple sensors
+            
+            while self.collecting_calibration and (time.time() - start_time) < timeout:
+                await asyncio.sleep(0.1)
+                
+                # Check if all sensors have completed calibration
+                all_complete = True
+                for sensor_mac in connected_sensor_macs:
+                    if not self.per_sensor_calibration[sensor_mac]["complete"]:
+                        all_complete = False
+                        break
+                
+                if all_complete:
+                    self.collecting_calibration = False
+                    break
+            
+            if self.collecting_calibration:  # Still collecting means timeout
+                incomplete_sensors = [mac for mac in connected_sensor_macs 
+                                    if not self.per_sensor_calibration[mac]["complete"]]
+                self.logger.error(f"Multi-sensor calibration timeout - incomplete sensors: {incomplete_sensors}")
+                return False
+            
+            # Process calibration for each sensor
+            calibrated_count = 0
+            for sensor_mac in connected_sensor_macs:
+                sensor_data = self.per_sensor_calibration[sensor_mac]
+                samples = sensor_data["samples"]
+                
+                if len(samples) < self.sensor_target_count:
+                    self.logger.warning(f"Sensor {sensor_mac[-5:]} insufficient samples: {len(samples)}")
+                    continue
+                
+                # Calculate baseline using outlier-filtered median (same as single sensor)
+                vx_values = [s['vx'] for s in samples]
+                vy_values = [s['vy'] for s in samples]
+                vz_values = [s['vz'] for s in samples]
+                
+                # Filter outliers using interquartile range method
+                def filter_outliers(values):
+                    if len(values) < 10:
+                        return values
+                    import statistics
+                    q1 = statistics.quantiles(values, n=4)[0]
+                    q3 = statistics.quantiles(values, n=4)[2]
+                    iqr = q3 - q1
+                    lower_bound = q1 - 1.5 * iqr
+                    upper_bound = q3 + 1.5 * iqr
+                    return [v for v in values if lower_bound <= v <= upper_bound]
+                
+                vx_filtered = filter_outliers(vx_values)
+                vy_filtered = filter_outliers(vy_values)
+                vz_filtered = filter_outliers(vz_values)
+                
+                baseline_x = statistics.median(vx_filtered) if vx_filtered else statistics.median(vx_values)
+                baseline_y = statistics.median(vy_filtered) if vy_filtered else statistics.median(vy_values)
+                baseline_z = statistics.median(vz_filtered) if vz_filtered else statistics.median(vz_values)
+                
+                # Calculate noise characteristics
+                noise_x = statistics.stdev(vx_filtered) if len(set(vx_filtered)) > 1 else 0
+                noise_y = statistics.stdev(vy_filtered) if len(set(vy_filtered)) > 1 else 0
+                noise_z = statistics.stdev(vz_filtered) if len(set(vz_filtered)) > 1 else 0
+                
+                # Store sensor baseline
+                self.sensor_baselines[sensor_mac] = {
+                    "baseline_x": baseline_x,
+                    "baseline_y": baseline_y,
+                    "baseline_z": baseline_z,
+                    "noise_x": noise_x,
+                    "noise_y": noise_y,
+                    "noise_z": noise_z,
+                    "sample_count": len(samples)
+                }
+                
+                calibrated_count += 1
+                sensor_id = sensor_mac[-5:].replace(":", "")
+                self.logger.info(f"Sensor {sensor_id} calibrated: X={baseline_x:.1f}, Y={baseline_y:.1f}, Z={baseline_z:.1f}")
+            
+            # Set compatibility values from first sensor for legacy code
+            if connected_sensor_macs and calibrated_count > 0:
+                first_sensor_baseline = self.sensor_baselines[connected_sensor_macs[0]]
+                self.baseline_x = first_sensor_baseline["baseline_x"]
+                self.baseline_y = first_sensor_baseline["baseline_y"] 
+                self.baseline_z = first_sensor_baseline["baseline_z"]
+                
+                # Initialize shot detector with first sensor baseline for compatibility
+                if COMPONENTS_AVAILABLE:
+                    min_dur, max_dur = dev_config.get_shot_duration_range()
+                    self.shot_detector = ShotDetector(
+                        baseline_x=0,  # Using pre-corrected samples, so baseline is 0
+                        threshold=dev_config.get_shot_threshold(),
+                        min_duration=min_dur,
+                        max_duration=max_dur,
+                        min_interval_seconds=dev_config.get_shot_interval()
+                    )
+                    self.logger.info("✓ Shot detector initialized with calibrated baseline")
+            
+            self.calibration_complete = True
+            
+            self.logger.info(f"✅ Multi-sensor calibration completed successfully!")
+            self.logger.info(f"📊 Calibrated {calibrated_count}/{len(connected_sensor_macs)} sensors")
+            for sensor_mac in connected_sensor_macs:
+                if sensor_mac in self.sensor_baselines:
+                    baseline = self.sensor_baselines[sensor_mac]
+                    sensor_id = sensor_mac[-5:].replace(":", "")
+                    self.logger.info(f"📊 Sensor {sensor_id}: X={baseline['baseline_x']:.1f}, Y={baseline['baseline_y']:.1f}, Z={baseline['baseline_z']:.1f}")
+            
+            # Reset enhanced impact detector if available
+            if self.enhanced_impact_detector:
+                self.enhanced_impact_detector.reset()
+            
+            # Switch to normal notification handlers on all sensors
+            for client in self.bt50_clients:
+                await client.stop_notify(BT50_SENSOR_UUID)
+                await client.start_notify(BT50_SENSOR_UUID, self.bt50_notification_handler)
+            
+            self.logger.info(f"📝 Status: All {len(self.bt50_clients)} sensors - Listening")
+            self.logger.info("Multi-sensor BT50 and impact notifications enabled")
+            self.logger.info("-----------------------------🎯Bridge ready for String🎯-----------------------------")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Multi-sensor calibration failed: {e}")
+            return False
+    
+    async def sensor_specific_calibration_handler(self, sensor_mac, data):
+        """Handle calibration sample collection for a specific sensor"""
+        if not self.collecting_calibration or sensor_mac not in self.per_sensor_calibration:
+            return
+            
+        try:
+            if COMPONENTS_AVAILABLE:
+                result = parse_5561(data)
+                if result and result['samples']:
+                    for sample in result['samples']:
+                        self.per_sensor_calibration[sensor_mac]["samples"].append(sample)
+                        
+                        current_count = len(self.per_sensor_calibration[sensor_mac]["samples"])
+                        target_count = self.per_sensor_calibration[sensor_mac]["target_samples"]
+                        
+                        # Progress reporting every 20 samples per sensor
+                        if current_count % 20 == 0:
+                            sensor_id = sensor_mac[-5:].replace(":", "")
+                            print(f"📊 Sensor {sensor_id}: {current_count}/{target_count} samples...")
+                        
+                        if current_count >= target_count:
+                            self.per_sensor_calibration[sensor_mac]["complete"] = True
+                            sensor_id = sensor_mac[-5:].replace(":", "")
+                            print(f"✅ Sensor {sensor_id}: Calibration complete ({current_count} samples)")
+                            
+        except Exception as e:
+            sensor_id = sensor_mac[-5:].replace(":", "") if sensor_mac else "unknown"
+            self.logger.error(f"Calibration data collection failed for sensor {sensor_id}: {e}")
+    
+    async def multi_sensor_calibration_handler(self, characteristic, data):
+        """Handle calibration sample collection for multiple sensors"""
+        if not self.collecting_calibration:
+            return
+            
+        try:
+            # Get sensor MAC from the characteristic's client
+            # We need to match this characteristic to the correct client
+            sensor_mac = None
+            
+            # Find which client this characteristic belongs to
+            for client in self.bt50_clients:
+                if client.is_connected:
+                    try:
+                        # Get the service from the client
+                        services = await client.get_services()
+                        for service in services:
+                            for char in service.characteristics:
+                                if char.handle == characteristic.handle:
+                                    sensor_mac = client.address
+                                    break
+                            if sensor_mac:
+                                break
+                    except Exception:
+                        # If we can't match, try using client address directly
+                        continue
+                
+                if sensor_mac:
+                    break
+            
+            # If we still can't identify the sensor, skip this sample
+            if not sensor_mac or sensor_mac not in self.per_sensor_calibration:
+                return
+            
+            if COMPONENTS_AVAILABLE:
+                result = parse_5561(data)
+                if result and result['samples']:
+                    for sample in result['samples']:
+                        self.per_sensor_calibration[sensor_mac]["samples"].append(sample)
+                        
+                        current_count = len(self.per_sensor_calibration[sensor_mac]["samples"])
+                        target_count = self.per_sensor_calibration[sensor_mac]["target_samples"]
+                        
+                        # Progress reporting every 20 samples per sensor
+                        if current_count % 20 == 0:
+                            sensor_id = sensor_mac[-5:].replace(":", "")
+                            print(f"📊 Sensor {sensor_id}: {current_count}/{target_count} samples...")
+                        
+                        if current_count >= target_count:
+                            self.per_sensor_calibration[sensor_mac]["complete"] = True
+                            sensor_id = sensor_mac[-5:].replace(":", "")
+                            print(f"✅ Sensor {sensor_id}: Calibration complete ({current_count} samples)")
+                            
+        except Exception as e:
+            self.logger.error(f"Multi-sensor calibration data collection failed: {e}")
+            
+    async def perform_startup_calibration(self):
+        """Perform automatic startup calibration (legacy single-sensor method)"""
+        self.logger.info("🎯 Starting automatic calibration...")
+        self.logger.info(f"Calibration: {DEFAULT_CALIBRATION_SAMPLES} samples, auto=True")
+        self.logger.info("================================")
+        print("🎯 Performing startup calibration...")
+        print("📋 Please ensure sensor is STATIONARY during calibration")
+        print("⏱️  Collecting samples for baseline establishment...")
+        
+        # Reset calibration state
+        self.calibration_samples = []
+        self.collecting_calibration = True
+        
+        try:
+            await self.bt50_client.start_notify(BT50_SENSOR_UUID, self.calibration_notification_handler)
+            
+            # Wait for calibration to complete
+            start_time = time.time()
+            timeout = dev_config.get_calibration_timeout() if COMPONENTS_AVAILABLE else 30
+            
+            while self.collecting_calibration and (time.time() - start_time) < timeout:
+                await asyncio.sleep(0.1)
+                if len(self.calibration_samples) >= DEFAULT_CALIBRATION_SAMPLES:
+                    break
+            
+            if len(self.calibration_samples) < DEFAULT_CALIBRATION_SAMPLES:
+                self.logger.error(f"Calibration timeout - only {len(self.calibration_samples)} samples collected")
+                return False
+                
+            # Calculate baseline using outlier-filtered median (more robust)
+            # Use scaled values like TinTown  
+            vx_values = [s['vx'] for s in self.calibration_samples]
+            vy_values = [s['vy'] for s in self.calibration_samples]
+            vz_values = [s['vz'] for s in self.calibration_samples]
+            
+            # Filter outliers using interquartile range method
+            def filter_outliers(values):
+                if len(values) < 10:
+                    return values
+                q1 = statistics.quantiles(values, n=4)[0]
+                q3 = statistics.quantiles(values, n=4)[2]
+                iqr = q3 - q1
+                lower_bound = q1 - 1.5 * iqr
+                upper_bound = q3 + 1.5 * iqr
+                return [v for v in values if lower_bound <= v <= upper_bound]
+            
+            vx_filtered = filter_outliers(vx_values)
+            vy_filtered = filter_outliers(vy_values)  
+            vz_filtered = filter_outliers(vz_values)
+            
+            self.baseline_x = statistics.median(vx_filtered) if vx_filtered else statistics.median(vx_values)
+            self.baseline_y = statistics.median(vy_filtered) if vy_filtered else statistics.median(vy_values)
+            self.baseline_z = statistics.median(vz_filtered) if vz_filtered else statistics.median(vz_values)
+            
+            # Calculate noise characteristics using filtered values
+            noise_x = statistics.stdev(vx_filtered) if len(set(vx_filtered)) > 1 else 0
+            noise_y = statistics.stdev(vy_filtered) if len(set(vy_filtered)) > 1 else 0
+            noise_z = statistics.stdev(vz_filtered) if len(set(vz_filtered)) > 1 else 0
+            
+            # Initialize shot detector with calibrated baseline
+            if COMPONENTS_AVAILABLE:
+                min_dur, max_dur = dev_config.get_shot_duration_range()
+                self.shot_detector = ShotDetector(
+                    baseline_x=0,  # Using pre-corrected samples, so baseline is 0
+                    threshold=dev_config.get_shot_threshold(),
+                    min_duration=min_dur,
+                    max_duration=max_dur,
+                    min_interval_seconds=dev_config.get_shot_interval()
+                )
+                self.logger.info("✓ Shot detector initialized with calibrated baseline")
+            
+            self.calibration_complete = True
+            
+            # Log calibration results in TinTown format with appropriate precision
+            self.logger.info(f"Calibration complete: X={self.baseline_x:.1f}, Y={self.baseline_y:.1f}, Z={self.baseline_z:.1f}")
+            self.logger.info("✅ Calibration completed successfully!")
+            self.logger.info(f"📊 Baseline established: X={self.baseline_x:.1f}, Y={self.baseline_y:.1f}, Z={self.baseline_z:.1f}")
+            self.logger.info(f"📈 Noise levels: X=±{noise_x:.3f}, Y=±{noise_y:.3f}, Z=±{noise_z:.3f}")
+            self.logger.info(f"🎯 Impact threshold: 25 counts from baseline")
             
             # Reset enhanced impact detector to clear any residual state
             if self.enhanced_impact_detector:
@@ -474,7 +832,6 @@ class LeadVilleBridge:
             return False
             
     async def amg_notification_handler(self, characteristic, data):
-        """Handle AMG timer notifications with enhanced parsing"""
         hex_data = data.hex()
         self.logger.debug(f"AMG notification: {hex_data}")
         
@@ -594,19 +951,21 @@ class LeadVilleBridge:
         capture process queue and uses WAL mode for safe concurrent writes.
         """
         try:
-            # Prefer the canonical project DB location `db/leadville_runtime.db` (new layout).
-            # Keep legacy fallbacks for older deployments that still use `logs/`.
-            # Prefer explicit env override, then use project db location
-            project_db = Path(__file__).parent.parent.parent / 'db' / 'leadville_runtime.db'
-            env_db = os.environ.get('CAPTURE_DB_PATH')
-            if env_db:
-                db_path = Path(env_db)
-            else:
-                db_path = project_db
+            # Force the exact database path to avoid any resolution issues
+            db_path = Path("/home/jrwest/projects/LeadVille/db/leadville_runtime.db")
+            self.logger.debug(f"Using database path: {db_path}")
+            
+            # Ensure parent directory exists
             db_path.parent.mkdir(parents=True, exist_ok=True)
             con = sqlite3.connect(str(db_path))
             cur = con.cursor()
             cur.execute("PRAGMA journal_mode=WAL")
+            self.logger.debug(f"✅ Connected to database: {db_path}")
+            
+            # Log the actual table schema for debugging
+            cur.execute("PRAGMA table_info(timer_events)")
+            columns = [row[1] for row in cur.fetchall()]
+            self.logger.debug(f"Database columns: {columns}")
             # Ensure timer_events table exists so bridge can write even if capture
             # process hasn't been started to create schema.
             cur.execute(
@@ -618,7 +977,12 @@ class LeadVilleBridge:
                     event_type TEXT,
                     split_seconds REAL,
                     split_cs INTEGER,
-                    raw_hex TEXT
+                    raw_hex TEXT,
+                    current_shot INTEGER,
+                    total_shots INTEGER,
+                    current_round INTEGER,
+                    string_total_time REAL,
+                    parsed_json TEXT
                 )
                 """
             )
@@ -648,6 +1012,7 @@ class LeadVilleBridge:
             )
             con.commit()
             con.close()
+            self.logger.debug(f"✅ Timer event persisted: {event_type} - {current_shot}/{total_shots} shots, {split_seconds}s")
         except Exception as e:
             # swallow errors - this is best-effort logging
             self.logger.debug(f"Timer event persistence failed: {e}")
@@ -696,7 +1061,11 @@ class LeadVilleBridge:
                 
             # Process samples for shot detection
             if self.shot_detector:
-                detected_shots = self.shot_detector.process_samples(corrected_samples)
+                detected_shots = []
+                for corrected_sample in corrected_samples:
+                    shot_event = self.shot_detector.process_sample(corrected_sample['vx_corrected'], corrected_sample.get('timestamp'))
+                    if shot_event:
+                        detected_shots.append(shot_event)
                 
                 for shot in detected_shots:
                     self.impact_counter += 1
@@ -716,12 +1085,56 @@ class LeadVilleBridge:
                     # Record impact for timing correlation
                     if self.timing_calibrator:
                         self.timing_calibrator.record_impact(shot.timestamp, shot.peak_magnitude)
+                    
+                    # Log impact to database
+                    try:
+                        db_path = os.path.join(os.path.dirname(__file__), "leadville.db")
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
+                        
+                        # Get sensor MAC from characteristic  
+                        sensor_mac = characteristic.service.device.address.replace(':', '').upper()
+                        
+                        cursor.execute("""
+                            INSERT INTO sensor_events (ts_utc, sensor_id, magnitude, features_json, created_at)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (
+                            shot.timestamp.isoformat(),
+                            sensor_mac,
+                            shot.max_deviation,
+                            json.dumps({
+                                'impact_counter': self.impact_counter,
+                                'string_number': self.current_string_number,
+                                'time_from_start': time_from_start,
+                                'time_from_shot': time_from_shot,
+                                'duration_samples': shot.duration_samples,
+                                'x_values': shot.x_values
+                            }),
+                            datetime.now().isoformat()
+                        ))
+                        
+                        conn.commit()
+                        conn.close()
+                        self.logger.debug(f"💾 Impact logged to database: sensor={sensor_mac}, magnitude={shot.max_deviation}")
+                        
+                    except Exception as db_error:
+                        self.logger.error(f"Failed to log impact to database: {db_error}")
             
             # Enhanced impact detection (if enabled)
             if self.enhanced_impact_detector:
-                enhanced_impacts = self.enhanced_impact_detector.process_samples(
-                    corrected_samples, 0  # baseline_x = 0 since we already corrected
-                )
+                enhanced_impacts = []
+                for corrected_sample in corrected_samples:
+                    # Calculate magnitude from corrected values
+                    magnitude = (corrected_sample['vx_corrected']**2 + corrected_sample['vy_corrected']**2 + corrected_sample['vz_corrected']**2)**0.5
+                    timestamp = datetime.fromtimestamp(corrected_sample.get('timestamp', time.time()))
+                    raw_values = [sample['vx'], sample['vy'], sample['vz']]
+                    corrected_values = [corrected_sample['vx_corrected'], corrected_sample['vy_corrected'], corrected_sample['vz_corrected']]
+                    
+                    impact_event = self.enhanced_impact_detector.process_sample(
+                        timestamp, raw_values, corrected_values, magnitude
+                    )
+                    if impact_event:
+                        enhanced_impacts.append(impact_event)
                 
                 for impact in enhanced_impacts:
                     # Calculate time from string start
@@ -841,23 +1254,45 @@ class LeadVilleBridge:
             
         # Connect BT50 Sensors if assigned
         if sensor_macs:
-            # For now, connect to the first assigned sensor (can be expanded for multiple sensors)
-            primary_sensor_mac = sensor_macs[0]
-            try:
-                self.logger.info(f"Connecting to assigned BT50 sensor: {primary_sensor_mac}")
-                self.bt50_client = BleakClient(primary_sensor_mac)
-                await self.bt50_client.connect()
-                self.logger.info(f"📝 Status: Sensor {primary_sensor_mac[-5:]} - Connected")
+            # Connect to all assigned sensors (multi-sensor support)
+            self.bt50_clients = []  # Reset clients list
+            connected_count = 0
+            
+            for i, sensor_mac in enumerate(sensor_macs):
+                target_num = i + 1
+                sensor_id = sensor_mac[-5:].replace(":", "")
                 
-                # Perform calibration
-                await asyncio.sleep(1.0)  # Let connection stabilize
-                calibration_success = await self.perform_startup_calibration()
+                try:
+                    self.logger.info(f"Connecting to BT50 sensor - Target {target_num} ({sensor_id})...")
+                    self.logger.info(f"Target {target_num} MAC: {sensor_mac}")
+                    
+                    client = BleakClient(sensor_mac)
+                    await client.connect()
+                    self.bt50_clients.append(client)
+                    connected_count += 1
+                    
+                    # Use first sensor as primary for compatibility with legacy code
+                    if i == 0:
+                        self.bt50_client = client
+                    
+                    self.logger.info(f"📝 Status: Sensor {sensor_id} - Connected (Target {target_num})")
+                    
+                except Exception as e:
+                    self.logger.error(f"BT50 sensor {sensor_mac} connection failed: {e}")
+                    continue
+            
+            if connected_count > 0:
+                self.logger.info(f"📝 Status: {connected_count}/{len(sensor_macs)} BT50 sensors connected")
+                
+                # Perform multi-sensor calibration
+                await asyncio.sleep(1.0)  # Let connections stabilize
+                calibration_success = await self.perform_multi_sensor_calibration()
                 
                 if not calibration_success:
-                    self.logger.error("❌ Calibration failed - bridge not ready")
+                    self.logger.error("❌ Multi-sensor calibration failed - bridge not ready")
+            else:
+                self.logger.error("❌ No BT50 sensors could be connected")
                     
-            except Exception as e:
-                self.logger.error(f"BT50 sensor connection failed: {e}")
         else:
             self.logger.warning("No BT50 sensors assigned to this Bridge")
             
@@ -898,8 +1333,15 @@ class LeadVilleBridge:
         # Disconnect devices
         if self.amg_client and self.amg_client.is_connected:
             await self.amg_client.disconnect()
-            
-        if self.bt50_client and self.bt50_client.is_connected:
+        
+        # Disconnect all BT50 sensors
+        if self.bt50_clients:
+            for client in self.bt50_clients:
+                if client and client.is_connected:
+                    await client.disconnect()
+            self.logger.info(f"Disconnected {len(self.bt50_clients)} BT50 sensors")
+        elif self.bt50_client and self.bt50_client.is_connected:
+            # Legacy single sensor disconnect
             await self.bt50_client.disconnect()
             
         self.logger.info("Cleanup complete")
@@ -919,7 +1361,7 @@ class LeadVilleBridge:
             if COMPONENTS_AVAILABLE and self.calibration_complete:
                 print("\n=== AUTOMATIC CALIBRATION BRIDGE WITH SHOT DETECTION ===")
                 print("✨ Dynamic baseline calibration - establishes fresh zero on every startup")
-                print("🎯 Shot Detection: 150 count threshold, 6-11 sample duration, 1s interval")
+                print("🎯 Shot Detection: 25 count threshold, 6-11 sample duration, 1s interval")
                 print(f"📊 Current baseline: X={self.baseline_x}, Y={self.baseline_y}, Z={self.baseline_z} (auto-calibrated)")
                 print(f"⚡ Impact threshold: {DEFAULT_IMPACT_THRESHOLD} counts from dynamic baseline")
                 print("🔄 Baseline automatically corrects for any sensor orientation")

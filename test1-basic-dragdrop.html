@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test 1: Basic Drag and Drop</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .device-box {
+            width: 200px;
+            padding: 15px;
+            margin: 10px;
+            background: lightblue;
+            border: 2px solid #333;
+            cursor: grab;
+            border-radius: 8px;
+        }
+        .device-box:active { cursor: grabbing; }
+        .device-box.dragging { opacity: 0.5; }
+        
+        .target-box {
+            width: 300px;
+            height: 100px;
+            padding: 20px;
+            margin: 20px;
+            background: lightgreen;
+            border: 2px dashed #333;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .target-box.drag-over {
+            background: yellow;
+            border-color: red;
+        }
+        
+        #log {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            background: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test 1: Basic Drag and Drop</h1>
+    <p>This tests if basic HTML5 drag and drop works in your browser.</p>
+
+    <div class="device-box" draggable="true" data-device="sensor-1">
+        📡 BT50 Sensor 1
+        <div>Address: EA:18:3D:6D:BA:E5</div>
+    </div>
+
+    <div class="device-box" draggable="true" data-device="timer-1">
+        ⏱️ AMG Timer
+        <div>Address: 60:09:C3:1F:DC:1A</div>
+    </div>
+
+    <div class="target-box" data-target="1">
+        🎯 Target 1 - Drop devices here
+    </div>
+
+    <div class="target-box" data-target="2">
+        🎯 Target 2 - Drop devices here
+    </div>
+
+    <h3>Event Log:</h3>
+    <div id="log"></div>
+    <button onclick="clearLog()">Clear Log</button>
+
+    <script>
+        const log = document.getElementById('log');
+        
+        function logEvent(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `[${timestamp}] ${message}<br>`;
+            log.scrollTop = log.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            log.innerHTML = '';
+        }
+
+        // Add event listeners to devices
+        document.querySelectorAll('.device-box').forEach(device => {
+            device.addEventListener('dragstart', (e) => {
+                device.classList.add('dragging');
+                const deviceId = device.getAttribute('data-device');
+                logEvent(`Drag started: ${deviceId}`);
+                e.dataTransfer.setData('text/plain', deviceId);
+            });
+
+            device.addEventListener('dragend', (e) => {
+                device.classList.remove('dragging');
+                logEvent(`Drag ended`);
+            });
+        });
+
+        // Add event listeners to targets
+        document.querySelectorAll('.target-box').forEach(target => {
+            target.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
+
+            target.addEventListener('dragenter', (e) => {
+                target.classList.add('drag-over');
+                const targetId = target.getAttribute('data-target');
+                logEvent(`Drag enter target: ${targetId}`);
+            });
+
+            target.addEventListener('dragleave', (e) => {
+                target.classList.remove('drag-over');
+                const targetId = target.getAttribute('data-target');
+                logEvent(`Drag leave target: ${targetId}`);
+            });
+
+            target.addEventListener('drop', (e) => {
+                e.preventDefault();
+                target.classList.remove('drag-over');
+                const deviceId = e.dataTransfer.getData('text/plain');
+                const targetId = target.getAttribute('data-target');
+                logEvent(`DROP: ${deviceId} dropped on target ${targetId}`);
+                alert(`Successfully dropped ${deviceId} on target ${targetId}!`);
+            });
+        });
+
+        logEvent('Basic drag and drop test loaded');
+    </script>
+</body>
+</html>

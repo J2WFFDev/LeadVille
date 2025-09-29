@@ -48,7 +48,7 @@ class DevicePool(Base):
     __table_args__ = (
         CheckConstraint("battery >= 0 AND battery <= 100", name='check_pool_device_battery'),
         CheckConstraint("rssi >= -100 AND rssi <= 0", name='check_pool_device_rssi'),
-        CheckConstraint("device_type IN ('timer', 'sensor', 'other')", name='check_device_type'),
+        CheckConstraint("device_type IN ('timer', 'sensor', 'shot_timer', 'other')", name='check_device_type'),
         Index('idx_pool_hw_addr', 'hw_addr'),
         Index('idx_pool_status', 'status'),
         Index('idx_pool_device_type', 'device_type'),

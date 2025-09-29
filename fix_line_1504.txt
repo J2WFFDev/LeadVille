@@ -1,0 +1,1 @@
+            alert(`✅ SUCCESS!\n\nDevice: ${deviceAddress}\nAssigned as: ${deviceType}\nTarget: ${targetId}\n\nPage will refresh to show changes.`);

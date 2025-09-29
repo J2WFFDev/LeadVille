@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test 4: Drag and Drop with Real Devices</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .devices-section, .targets-section {
+            border: 2px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 400px;
+        }
+        
+        .device-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #e3f2fd;
+            border: 1px solid #1976d2;
+            border-radius: 6px;
+            cursor: grab;
+        }
+        .device-item:active { cursor: grabbing; }
+        .device-item.dragging { opacity: 0.5; }
+        
+        .target-item {
+            padding: 15px;
+            margin: 10px 0;
+            background: #f3e5f5;
+            border: 2px dashed #7b1fa2;
+            border-radius: 8px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .target-item.drag-over {
+            background: #fff3e0;
+            border-color: #f57c00;
+            border-style: solid;
+        }
+        
+        .loading { color: #666; font-style: italic; }
+        .error { color: red; background: #ffebee; padding: 10px; border-radius: 4px; }
+        .success { color: green; background: #e8f5e8; padding: 10px; border-radius: 4px; }
+        
+        #log {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            background: #f5f5f5;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test 4: Drag and Drop with Real Devices</h1>
+    <p>This tests drag and drop using actual devices from your API.</p>
+    
+    <button onclick="loadTestData()">Load Real Data</button>
+    <button onclick="clearLog()">Clear Log</button>
+
+    <div class="container">
+        <div class="devices-section">
+            <h3>📱 Device Pool</h3>
+            <div id="devices-list">
+                <div class="loading">Click "Load Real Data" to load devices</div>
+            </div>
+        </div>
+        
+        <div class="targets-section">
+            <h3>🎯 Targets</h3>
+            <div id="targets-list">
+                <div class="loading">Targets will load with stage data</div>
+            </div>
+        </div>
+    </div>
+
+    <h3>Event Log:</h3>
+    <div id="log"></div>
+
+    <script>
+        const API_BASE = `${window.location.protocol}//${window.location.hostname}:8001`;
+        let currentStageId = null;
+        let draggedDevice = null;
+        
+        const log = document.getElementById('log');
+        
+        function logEvent(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `[${timestamp}] ${message}<br>`;
+            log.scrollTop = log.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            log.innerHTML = '';
+        }
+
+        async function loadTestData() {
+            logEvent('Loading real data from API...');
+            
+            try {
+                // Load devices
+                await loadDevices();
+                
+                // Load stages and current stage
+                await loadTargets();
+                
+                logEvent('✅ Real data loaded successfully');
+                
+            } catch (error) {
+                logEvent(`❌ Error loading data: ${error.message}`);
+            }
+        }
+
+        async function loadDevices() {
+            const devicesList = document.getElementById('devices-list');
+            devicesList.innerHTML = '<div class="loading">Loading devices...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/devices`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                const devices = data.devices || [];
+                
+                if (devices.length === 0) {
+                    devicesList.innerHTML = '<div>No devices found</div>';
+                    return;
+                }
+                
+                devicesList.innerHTML = devices.map(device => {
+                    const isTimer = device.label?.toLowerCase().includes('timer') || 
+                                   device.address === '60:09:C3:1F:DC:1A';
+                    const icon = isTimer ? '⏱️' : '📡';
+                    const shortAddr = device.address.slice(-8);
+                    
+                    return `
+                        <div class="device-item" 
+                             draggable="true"
+                             data-device-id="${device.id}"
+                             data-device-address="${device.address}"
+                             data-device-label="${device.label || 'Unknown'}"
+                             data-device-type="${isTimer ? 'timer' : 'sensor'}">
+                            <div><strong>${icon} ${device.label || 'Unknown Device'}</strong></div>
+                            <div>ID: ${device.id} • ${shortAddr}</div>
+                            <div>Status: ${device.status || 'unknown'}</div>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Add drag event listeners
+                addDeviceDragListeners();
+                logEvent(`Loaded ${devices.length} devices`);
+                
+            } catch (error) {
+                devicesList.innerHTML = `<div class="error">Error loading devices: ${error.message}</div>`;
+                throw error;
+            }
+        }
+
+        async function loadTargets() {
+            const targetsList = document.getElementById('targets-list');
+            targetsList.innerHTML = '<div class="loading">Loading targets...</div>';
+            
+            try {
+                // Get current stage ID from localStorage or default
+                currentStageId = localStorage.getItem('leadville_current_stage_id') || '1';
+                
+                const response = await fetch(`${API_BASE}/api/admin/stages/${currentStageId}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const stage = await response.json();
+                
+                if (!stage.targets || stage.targets.length === 0) {
+                    targetsList.innerHTML = '<div>No targets found for current stage</div>';
+                    return;
+                }
+                
+                targetsList.innerHTML = stage.targets.map(target => {
+                    const hasSensor = target.sensor !== null;
+                    const status = hasSensor ? '✅ Assigned' : '❌ Unassigned';
+                    const sensorInfo = hasSensor ? 
+                        `<br><small>Sensor: ${target.sensor.label}</small>` : 
+                        '<br><small>Drag device here</small>';
+                    
+                    return `
+                        <div class="target-item" data-target-id="${target.target_number}">
+                            <div>
+                                <strong>🎯 Target ${target.target_number}</strong><br>
+                                ${target.shape} ${target.type} • ${target.distance_feet}ft<br>
+                                ${status}
+                                ${sensorInfo}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Add drop event listeners
+                addTargetDropListeners();
+                logEvent(`Loaded ${stage.targets.length} targets for stage ${currentStageId}`);
+                
+            } catch (error) {
+                targetsList.innerHTML = `<div class="error">Error loading targets: ${error.message}</div>`;
+                throw error;
+            }
+        }
+
+        function addDeviceDragListeners() {
+            document.querySelectorAll('.device-item[draggable="true"]').forEach(device => {
+                device.addEventListener('dragstart', (e) => {
+                    device.classList.add('dragging');
+                    draggedDevice = {
+                        id: device.getAttribute('data-device-id'),
+                        address: device.getAttribute('data-device-address'),
+                        label: device.getAttribute('data-device-label'),
+                        type: device.getAttribute('data-device-type')
+                    };
+                    logEvent(`Drag started: ${draggedDevice.label} (${draggedDevice.type})`);
+                    e.dataTransfer.setData('text/plain', JSON.stringify(draggedDevice));
+                });
+
+                device.addEventListener('dragend', (e) => {
+                    device.classList.remove('dragging');
+                    logEvent('Drag ended');
+                });
+            });
+        }
+
+        function addTargetDropListeners() {
+            document.querySelectorAll('.target-item').forEach(target => {
+                target.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+
+                target.addEventListener('dragenter', (e) => {
+                    target.classList.add('drag-over');
+                    const targetId = target.getAttribute('data-target-id');
+                    logEvent(`Drag enter: Target ${targetId}`);
+                });
+
+                target.addEventListener('dragleave', (e) => {
+                    target.classList.remove('drag-over');
+                });
+
+                target.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    target.classList.remove('drag-over');
+                    
+                    const targetId = target.getAttribute('data-target-id');
+                    
+                    if (!draggedDevice) {
+                        logEvent('❌ No device data for drop');
+                        return;
+                    }
+                    
+                    logEvent(`Attempting to assign ${draggedDevice.label} to Target ${targetId}`);
+                    
+                    try {
+                        // Test the assignment API call
+                        const assignUrl = `${API_BASE}/api/admin/stages/${currentStageId}/targets/${targetId}/sensors/${draggedDevice.id}`;
+                        logEvent(`API call: PUT ${assignUrl}`);
+                        
+                        const response = await fetch(assignUrl, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        
+                        if (response.ok) {
+                            logEvent(`✅ Successfully assigned ${draggedDevice.label} to Target ${targetId}`);
+                            // Reload data to show changes
+                            setTimeout(() => loadTestData(), 1000);
+                        } else {
+                            const error = await response.json();
+                            logEvent(`❌ Assignment failed: ${error.error || 'Unknown error'}`);
+                        }
+                        
+                    } catch (error) {
+                        logEvent(`❌ Assignment error: ${error.message}`);
+                    }
+                });
+            });
+        }
+
+        logEvent('Test 4 page loaded - ready for drag and drop testing');
+    </script>
+</body>
+</html>

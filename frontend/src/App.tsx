@@ -13,8 +13,10 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ConsolePage } from './pages/ConsolePage';
 import { RangeOfficerPage } from './pages/RangeOfficerPage';
 import { StageSetupPage } from './pages/StageSetupPage';
+import { EnhancedStageSetupPage } from './pages/EnhancedStageSetupPage';
 import { TimerDashboardPage } from './pages/TimerDashboardPage';
 import { LiveLogPage } from './pages/LiveLogPage';
+import { DeviceAssignmentPage } from './pages/DeviceAssignmentPage';
 
 function App() {
   return (
@@ -28,9 +30,11 @@ function App() {
           <Route path="/sensor" element={<SensorPage />} />
           <Route path="/match-setup" element={<MatchSetupPage />} />
           <Route path="/stage-setup" element={<StageSetupPage />} />
+          <Route path="/stage-setup-enhanced" element={<EnhancedStageSetupPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/console" element={<ConsolePage />} />
           <Route path="/ro" element={<RangeOfficerPage />} />
+          <Route path="/device-assignment" element={<DeviceAssignmentPage />} />
         </Routes>
       </Layout>
     </Router>

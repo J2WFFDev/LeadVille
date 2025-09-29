@@ -6,6 +6,7 @@
 import { StatusPanel } from './StatusPanel';
 import { TimerPanel } from './TimerPanel';
 import { SensorPanel } from './SensorPanel';
+import { Link } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
   return (
@@ -47,9 +48,9 @@ export const Dashboard: React.FC = () => {
           <button className="btn-primary">
             🎯 Start Session
           </button>
-          <button className="btn-secondary">
-            ⏸️ Pause System
-          </button>
+          <Link to="/device-assignment" className="btn-secondary">
+            🔧 Device Assignment
+          </Link>
           <button className="btn-secondary">
             🔄 Reconnect
           </button>

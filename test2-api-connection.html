@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test 2: API Connection Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+        .success { border-color: green; background: #f0fff0; }
+        .error { border-color: red; background: #fff0f0; }
+        .loading { border-color: orange; background: #fff8f0; }
+        button { padding: 10px 15px; margin: 5px; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test 2: API Connection Test</h1>
+    <p>This tests if the LeadVille API endpoints are accessible.</p>
+
+    <div id="api-health" class="test-section loading">
+        <h3>API Health Check</h3>
+        <p>Testing: <code>GET /api/health</code></p>
+        <div id="health-result">Testing...</div>
+        <button onclick="testHealth()">Test Health</button>
+    </div>
+
+    <div id="api-devices" class="test-section loading">
+        <h3>Device Pool API</h3>
+        <p>Testing: <code>GET /api/admin/devices</code></p>
+        <div id="devices-result">Not tested yet</div>
+        <button onclick="testDevices()">Test Devices</button>
+    </div>
+
+    <div id="api-stages" class="test-section loading">
+        <h3>Stages API</h3>
+        <p>Testing: <code>GET /api/admin/stages</code></p>
+        <div id="stages-result">Not tested yet</div>
+        <button onclick="testStages()">Test Stages</button>
+    </div>
+
+    <div id="api-bridge" class="test-section loading">
+        <h3>Bridge Config API</h3>
+        <p>Testing: <code>GET /api/admin/bridge/config</code></p>
+        <div id="bridge-result">Not tested yet</div>
+        <button onclick="testBridge()">Test Bridge Config</button>
+    </div>
+
+    <script>
+        const API_BASE = `${window.location.protocol}//${window.location.hostname}:8001`;
+        console.log('API Base URL:', API_BASE);
+
+        async function fetchJSON(url) {
+            try {
+                console.log(`Fetching: ${url}`);
+                const response = await fetch(url);
+                console.log(`Response status: ${response.status}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                return { success: true, data, status: response.status };
+            } catch (error) {
+                console.error('Fetch error:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        function updateResult(sectionId, resultId, result) {
+            const section = document.getElementById(sectionId);
+            const resultDiv = document.getElementById(resultId);
+            
+            if (result.success) {
+                section.className = 'test-section success';
+                resultDiv.innerHTML = `
+                    <strong>✅ SUCCESS</strong><br>
+                    Status: ${result.status}<br>
+                    <pre>${JSON.stringify(result.data, null, 2)}</pre>
+                `;
+            } else {
+                section.className = 'test-section error';
+                resultDiv.innerHTML = `
+                    <strong>❌ FAILED</strong><br>
+                    Error: ${result.error}
+                `;
+            }
+        }
+
+        async function testHealth() {
+            document.getElementById('health-result').innerHTML = 'Testing...';
+            const result = await fetchJSON(`${API_BASE}/api/health`);
+            updateResult('api-health', 'health-result', result);
+        }
+
+        async function testDevices() {
+            document.getElementById('devices-result').innerHTML = 'Testing...';
+            const result = await fetchJSON(`${API_BASE}/api/admin/devices`);
+            updateResult('api-devices', 'devices-result', result);
+        }
+
+        async function testStages() {
+            document.getElementById('stages-result').innerHTML = 'Testing...';
+            const result = await fetchJSON(`${API_BASE}/api/admin/stages`);
+            updateResult('api-stages', 'stages-result', result);
+        }
+
+        async function testBridge() {
+            document.getElementById('bridge-result').innerHTML = 'Testing...';
+            const result = await fetchJSON(`${API_BASE}/api/admin/bridge/config`);
+            updateResult('api-bridge', 'bridge-result', result);
+        }
+
+        // Auto-run health check on load
+        window.addEventListener('load', () => {
+            console.log('API test page loaded');
+            testHealth();
+        });
+    </script>
+</body>
+</html>

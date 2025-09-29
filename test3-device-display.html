@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test 3: Device Display Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .device-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background: white;
+        }
+        .device-header {
+            font-weight: bold;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+        .device-details {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .error {
+            background: #fff0f0;
+            border-color: red;
+            color: red;
+        }
+        button { padding: 10px 15px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Test 3: Device Display Test</h1>
+    <p>This tests loading and displaying devices from the API.</p>
+
+    <button onclick="loadDevices()">Load Devices</button>
+    <button onclick="clearDevices()">Clear</button>
+
+    <div id="device-status" class="loading">
+        Click "Load Devices" to test device loading
+    </div>
+
+    <div id="devices-container">
+        <!-- Devices will be displayed here -->
+    </div>
+
+    <script>
+        const API_BASE = `${window.location.protocol}//${window.location.hostname}:8001`;
+
+        async function loadDevices() {
+            const statusDiv = document.getElementById('device-status');
+            const containerDiv = document.getElementById('devices-container');
+            
+            statusDiv.innerHTML = 'Loading devices...';
+            statusDiv.className = 'loading';
+            containerDiv.innerHTML = '';
+
+            try {
+                console.log('Loading devices from API...');
+                const response = await fetch(`${API_BASE}/api/admin/devices`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Devices data:', data);
+                
+                const devices = data.devices || [];
+                
+                if (devices.length === 0) {
+                    statusDiv.innerHTML = 'No devices found in pool';
+                    statusDiv.className = '';
+                    return;
+                }
+
+                statusDiv.innerHTML = `✅ Loaded ${devices.length} devices successfully`;
+                statusDiv.className = '';
+                
+                // Display each device
+                devices.forEach((device, index) => {
+                    const deviceDiv = document.createElement('div');
+                    deviceDiv.className = 'device-item';
+                    
+                    // Determine device type
+                    const isTimer = device.label?.toLowerCase().includes('timer') || 
+                                   device.address === '60:09:C3:1F:DC:1A';
+                    const deviceIcon = isTimer ? '⏱️' : '📡';
+                    const deviceType = isTimer ? 'Timer' : 'Sensor';
+                    
+                    deviceDiv.innerHTML = `
+                        <div class="device-header">
+                            <span>${deviceIcon} ${device.label || 'Unknown Device'} (${deviceType})</span>
+                            <span>${device.status || 'unknown'}</span>
+                        </div>
+                        <div class="device-details">
+                            <div><strong>Address:</strong> ${device.address}</div>
+                            <div><strong>ID:</strong> ${device.id}</div>
+                            <div><strong>Type:</strong> ${device.type || 'unknown'}</div>
+                            <div><strong>RSSI:</strong> ${device.rssi || 'N/A'} dBm</div>
+                            <div><strong>Battery:</strong> ${device.battery || 'N/A'}%</div>
+                            <div><strong>Target:</strong> ${device.target_id || 'Unassigned'}</div>
+                            <div><strong>Last Seen:</strong> ${device.last_seen || 'Never'}</div>
+                        </div>
+                    `;
+                    
+                    containerDiv.appendChild(deviceDiv);
+                });
+                
+            } catch (error) {
+                console.error('Error loading devices:', error);
+                statusDiv.innerHTML = `❌ Error loading devices: ${error.message}`;
+                statusDiv.className = 'error';
+            }
+        }
+
+        function clearDevices() {
+            document.getElementById('device-status').innerHTML = 'Devices cleared';
+            document.getElementById('device-status').className = '';
+            document.getElementById('devices-container').innerHTML = '';
+        }
+    </script>
+</body>
+</html>

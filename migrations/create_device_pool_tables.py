@@ -18,7 +18,7 @@ def create_device_pool_tables(db_path: str):
             CREATE TABLE IF NOT EXISTS device_pool (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 hw_addr VARCHAR(17) NOT NULL UNIQUE,
-                device_type VARCHAR(20) NOT NULL CHECK (device_type IN ('timer', 'sensor', 'other')),
+                device_type VARCHAR(20) NOT NULL CHECK (device_type IN ('timer', 'sensor', 'shot_timer', 'other')),
                 label VARCHAR(100) NOT NULL,
                 vendor VARCHAR(50),
                 model VARCHAR(50),

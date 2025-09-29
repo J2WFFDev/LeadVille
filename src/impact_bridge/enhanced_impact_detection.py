@@ -60,6 +60,14 @@ class EnhancedImpactDetector:
         logger.info(f"  Onset threshold: {onset_threshold}g") 
         logger.info(f"  Lookback samples: {lookback_samples}")
         
+    def reset(self):
+        """Reset detector state (clear history and current impact)"""
+        self.sample_history.clear()
+        self.current_impact_samples.clear()
+        self.in_impact = False
+        self.impact_start_index = -1
+        logger.debug("Enhanced impact detector state reset")
+        
     def process_sample(self, timestamp: datetime, raw_values: List[int], 
                       corrected_values: List[float], magnitude: float) -> Optional[ImpactEvent]:
         """Process a new sample and detect impact events with onset timing"""

@@ -6,9 +6,10 @@ import React, { useState } from 'react';
 import { NetworkManager } from '../components/NetworkManager';
 import { DeviceManager } from '../components/DeviceManager';
 import { BridgeManager } from '../components/BridgeManager';
+import { DeviceAssignment } from '../components/DeviceAssignment';
 
 export const SettingsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'network' | 'system' | 'devices' | 'bridge'>('network');
+  const [activeTab, setActiveTab] = useState<'network' | 'system' | 'devices' | 'bridge' | 'assignment'>('network');
   const [isRestarting, setIsRestarting] = useState(false);
 
   const handleRestartService = async () => {
@@ -68,6 +69,7 @@ export const SettingsPage: React.FC = () => {
               { id: 'network', label: '🌐 Network', icon: '🌐' },
               { id: 'devices', label: '📡 Devices', icon: '📡' },
               { id: 'bridge', label: '🌉 Bridge', icon: '🌉' },
+              { id: 'assignment', label: '🎯 Device Assignment', icon: '🎯' },
               { id: 'system', label: '⚙️ System', icon: '⚙️' }
             ].map((tab) => (
               <button
@@ -100,6 +102,10 @@ export const SettingsPage: React.FC = () => {
 
           {activeTab === 'bridge' && (
             <BridgeManager />
+          )}
+
+          {activeTab === 'assignment' && (
+            <DeviceAssignment />
           )}
 
           {activeTab === 'system' && (

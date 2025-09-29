@@ -22,6 +22,78 @@ logger = logging.getLogger(__name__)
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+# Database helper functions
+def get_db_connection():
+    """Get database connection with row factory"""
+    import sqlite3
+    from pathlib import Path
+    
+    db_path = Path("db/leadville.db")
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+async def _update_json_config_from_db(bridge_id: int):
+    """Update JSON config file from database (dual-write strategy)"""
+    import json
+    from pathlib import Path
+    
+    try:
+        with get_db_connection() as conn:
+            # Get bridge configuration including stage info
+            cursor = conn.execute("""
+                SELECT bc.timer_address, bc.stage_config_id, sc.name as stage_name
+                FROM bridge_configurations bc
+                LEFT JOIN stage_configs sc ON bc.stage_config_id = sc.id
+                WHERE bc.bridge_id = ?
+            """, (bridge_id,))
+            bridge_config = cursor.fetchone()
+            
+            timer_address = bridge_config['timer_address'] if bridge_config else None
+            stage_config_id = bridge_config['stage_config_id'] if bridge_config else None
+            stage_name = bridge_config['stage_name'] if bridge_config else None
+            
+            # Get sensor assignments with target information
+            cursor = conn.execute("""
+                SELECT target_number, sensor_address, sensor_label
+                FROM bridge_target_assignments 
+                WHERE bridge_id = ?
+                ORDER BY target_number
+            """, (bridge_id,))
+            assignments = cursor.fetchall()
+        
+        # Build sensor assignments dict for new unified format
+        sensors_dict = {}
+        for assignment in assignments:
+            target_key = f"target_{assignment['target_number']}"
+            sensors_dict[target_key] = {
+                "address": assignment['sensor_address'],
+                "label": assignment['sensor_label']
+            }
+        
+        # Write JSON config for boot sequence (bridge-compatible format)
+        # The bridge expects simple format with "timer" string and "sensors" array
+        sensor_addresses = [assignment['sensor_address'] for assignment in assignments]
+        
+        config_data = {
+            "timer": timer_address,
+            "sensors": sensor_addresses
+        }
+        
+        # Create config directory if it doesn't exist
+        config_dir = Path("config")
+        config_dir.mkdir(exist_ok=True)
+        
+        config_file = config_dir / "bridge_device_config.json"
+        with open(config_file, 'w') as f:
+            json.dump(config_data, f, indent=2)
+            
+        logger.info(f"Updated JSON config from database: {config_data}")
+        
+    except Exception as e:
+        logger.error(f"Failed to update JSON config from database: {e}")
+        raise
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -65,6 +137,33 @@ try:
 except Exception as e:
     logger.error(f"❌ Failed to include Device Pool API routes: {e}")
     # Continue without pool routes for now
+
+# Include SpecialPie timer management routes
+try:
+    from src.impact_bridge.specialpie_api import router as specialpie_router
+    app.include_router(specialpie_router)
+    logger.info("✅ SpecialPie Timer API routes included")
+except Exception as e:
+    logger.error(f"❌ Failed to include SpecialPie API routes: {e}")
+    # Continue without SpecialPie routes for now
+
+# Include AMG Commander timer management routes
+try:
+    from src.impact_bridge.amg_api import router as amg_router
+    app.include_router(amg_router)
+    logger.info("✅ AMG Commander Timer API routes included")
+except Exception as e:
+    logger.error(f"❌ Failed to include AMG Commander API routes: {e}")
+    # Continue without AMG routes for now
+
+# Include SpecialPie demo routes (for testing without hardware)
+try:
+    from src.impact_bridge.specialpie_demo import router as specialpie_demo_router
+    app.include_router(specialpie_demo_router)
+    logger.info("✅ SpecialPie Demo API routes included")
+except Exception as e:
+    logger.error(f"❌ Failed to include SpecialPie Demo routes: {e}")
+    # Continue without demo routes
 
 # Mount static files for dashboard pages
 try:
@@ -831,16 +930,31 @@ def get_device_assignments():
         )
 
 @app.post("/api/admin/devices/discovery/reset")
-def reset_device_discovery():
-    """Reset device discovery state (clear stuck scanning flag)"""
+async def reset_device_discovery():
+    """Reset device discovery state and Bluetooth adapter"""
     try:
         from src.impact_bridge.device_manager import device_manager
+        import subprocess
+        
+        # Reset device manager state
         device_manager.scanning = False
         device_manager.discovered_devices.clear()
-        logger.info("Device discovery state reset")
+        
+        # Reset Bluetooth adapter
+        try:
+            logger.info("Resetting Bluetooth adapter for discovery...")
+            subprocess.run(['sudo', 'hciconfig', 'hci0', 'reset'], 
+                         capture_output=True, timeout=3)
+            await asyncio.sleep(0.5)
+            subprocess.run(['sudo', 'bluetoothctl', 'pairable', 'on'], 
+                         capture_output=True, timeout=3)
+        except Exception as bt_reset_e:
+            logger.warning(f"Bluetooth reset during discovery reset failed: {bt_reset_e}")
+        
+        logger.info("Device discovery state and Bluetooth adapter reset")
         return JSONResponse(content={
             "status": "reset",
-            "message": "Device discovery state cleared"
+            "message": "Device discovery state and Bluetooth adapter reset"
         })
     except Exception as e:
         logger.error(f"Error resetting device discovery: {e}")
@@ -881,53 +995,78 @@ def get_node_info():
 
 @app.get("/api/admin/bridge/config")
 async def get_bridge_config():
-    """Get the current bridge device configuration"""
+    """Get the current bridge device configuration from database"""
     try:
-        import json
-        from pathlib import Path
-        
-        config_file = Path("bridge_device_config.json")
-        
-        if not config_file.exists():
-            return JSONResponse(
-                content={"error": "Bridge config file not found"},
-                status_code=404
-            )
-        
-        with open(config_file, 'r') as f:
-            config_data = json.load(f)
-        
-        # Enhance with device status information
-        timer = config_data.get("timer")
-        sensors = config_data.get("sensors", [])
+        # Get bridge configuration from database
+        with get_db_connection() as conn:
+            cursor = conn.execute("""
+                SELECT bc.bridge_id, bc.stage_config_id, bc.timer_address,
+                       sc.name as stage_name
+                FROM bridge_configurations bc
+                LEFT JOIN stage_configs sc ON bc.stage_config_id = sc.id
+                WHERE bc.bridge_id = 1
+            """)
+            bridge_config = cursor.fetchone()
+            
+            if not bridge_config:
+                return JSONResponse(
+                    content={"error": "Bridge configuration not found"},
+                    status_code=404
+                )
+            
+            # Get target assignments
+            cursor = conn.execute("""
+                SELECT target_number, sensor_address, sensor_label
+                FROM bridge_target_assignments
+                WHERE bridge_id = 1
+                ORDER BY target_number
+            """)
+            target_assignments = cursor.fetchall()
         
         # Get paired device information for status
         from src.impact_bridge.device_manager import device_manager
         paired_devices = device_manager.get_paired_devices()
         device_lookup = {device['address']: device for device in paired_devices}
         
-        # Build enriched response
-        response = {
-            "timer": {
-                "address": timer,
-                "status": "configured" if timer else "not_configured",
-                "device_info": device_lookup.get(timer) if timer else None
-            },
-            "sensors": []
+        # Build timer response
+        timer_address = bridge_config['timer_address']
+        timer_info = {
+            "address": timer_address,
+            "status": "configured" if timer_address else "not_configured",
+            "device_info": device_lookup.get(timer_address) if timer_address else None
         }
         
-        for sensor_addr in sensors:
+        # Build sensors response with target assignments
+        sensors = []
+        targets = {}
+        
+        for assignment in target_assignments:
+            sensor_addr = assignment['sensor_address']
+            target_num = assignment['target_number']
+            
             sensor_info = {
                 "address": sensor_addr,
+                "label": assignment['sensor_label'],
+                "target_number": target_num,
                 "device_info": device_lookup.get(sensor_addr),
                 "status": "paired" if sensor_addr in device_lookup else "not_paired"
             }
-            response["sensors"].append(sensor_info)
+            sensors.append(sensor_info)
+            targets[f"target_{target_num}"] = sensor_info
         
-        response["summary"] = {
-            "timer_configured": bool(timer),
-            "sensors_count": len(sensors),
-            "sensors_paired": len([s for s in sensors if s in device_lookup])
+        response = {
+            "bridge_id": bridge_config['bridge_id'],
+            "stage_config_id": bridge_config['stage_config_id'],
+            "stage_name": bridge_config['stage_name'],
+            "timer": timer_info,
+            "sensors": sensors,
+            "targets": targets,
+            "summary": {
+                "timer_configured": bool(timer_address),
+                "sensors_count": len(sensors),
+                "sensors_paired": len([s for s in sensors if s['status'] == 'paired']),
+                "targets_assigned": len(targets)
+            }
         }
         
         return JSONResponse(content=response)
@@ -936,6 +1075,450 @@ async def get_bridge_config():
         logger.error(f"Failed to get bridge config: {e}")
         return JSONResponse(
             content={"error": f"Failed to get bridge config: {str(e)}"},
+            status_code=500
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get bridge config: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to get bridge config: {str(e)}"},
+            status_code=500
+        )
+
+@app.put("/api/admin/bridge/config")
+async def update_bridge_config(request: dict):
+    """Update the bridge device configuration in database and JSON file"""
+    try:
+        import json
+        from pathlib import Path
+        
+        # Validate request structure
+        timer = request.get("timer")
+        sensors = request.get("sensors", [])
+        targets = request.get("targets", {})  # New: target assignments {"1": "EA:18...", "2": "DB:10..."}
+        
+        if not isinstance(sensors, list):
+            return JSONResponse(
+                content={"error": "sensors must be a list"},
+                status_code=400
+            )
+        
+        bridge_id = 1  # Default bridge ID
+        
+        # Update database with transaction
+        with get_db_connection() as conn:
+            conn.execute("BEGIN TRANSACTION")
+            
+            try:
+                # Update bridge configuration (timer)
+                conn.execute("""
+                    INSERT OR REPLACE INTO bridge_configurations 
+                    (bridge_id, stage_config_id, timer_address)
+                    VALUES (?, COALESCE((SELECT stage_config_id FROM bridge_configurations WHERE bridge_id = ?), 1), ?)
+                """, (bridge_id, bridge_id, timer))
+                
+                # Clear existing target assignments
+                conn.execute("DELETE FROM bridge_target_assignments WHERE bridge_id = ?", (bridge_id,))
+                
+                # Insert new target assignments
+                if targets:
+                    # Using targets dictionary (new format)
+                    for target_num_str, sensor_addr in targets.items():
+                        if sensor_addr:  # Only assign if not null/empty
+                            target_num = int(target_num_str)
+                            
+                            # Get sensor label from device pool
+                            cursor = conn.execute(
+                                "SELECT label FROM device_pool WHERE hw_addr = ?",
+                                (sensor_addr,)
+                            )
+                            device_row = cursor.fetchone()
+                            sensor_label = device_row['label'] if device_row else f"Sensor {sensor_addr[-4:]}"
+                            
+                            conn.execute("""
+                                INSERT INTO bridge_target_assignments 
+                                (bridge_id, target_number, sensor_address, sensor_label)
+                                VALUES (?, ?, ?, ?)
+                            """, (bridge_id, target_num, sensor_addr, sensor_label))
+                            
+                elif sensors:
+                    # Using sensors list (legacy format) - assign to targets sequentially
+                    for i, sensor_addr in enumerate(sensors):
+                        target_num = i + 1
+                        
+                        # Get sensor label from device pool
+                        cursor = conn.execute(
+                            "SELECT label FROM device_pool WHERE hw_addr = ?",
+                            (sensor_addr,)
+                        )
+                        device_row = cursor.fetchone()
+                        sensor_label = device_row['label'] if device_row else f"Sensor {sensor_addr[-4:]}"
+                        
+                        conn.execute("""
+                            INSERT INTO bridge_target_assignments 
+                            (bridge_id, target_number, sensor_address, sensor_label)
+                            VALUES (?, ?, ?, ?)
+                        """, (bridge_id, target_num, sensor_addr, sensor_label))
+                
+                conn.execute("COMMIT")
+                
+            except Exception as e:
+                conn.execute("ROLLBACK")
+                raise e
+        
+        # Dual-write: Update JSON file for boot sequence
+        await _update_json_config_from_db(bridge_id)
+        
+        logger.info(f"Updated bridge config: timer={timer}, targets={len(targets) if targets else len(sensors)} assignments")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": "Bridge configuration updated",
+            "config": {
+                "timer": timer,
+                "sensors": sensors,
+                "targets": targets
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to update bridge config: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to update bridge config: {str(e)}"},
+            status_code=500
+        )
+
+@app.put("/api/admin/bridge/target/{target_number}/assign")
+async def assign_device_to_target(target_number: str, request: dict):
+    """Assign a device to a specific target (for drag-and-drop)"""
+    try:
+        device_address = request.get("device_address")
+        bridge_id = request.get("bridge_id", 1)  # Default to bridge 1
+        
+        if not device_address:
+            return JSONResponse(
+                content={"error": "device_address is required"},
+                status_code=400
+            )
+        
+        # Handle timer assignment special case
+        if target_number == "timer":
+            is_timer_assignment = True
+            target_num = None
+        else:
+            try:
+                target_num = int(target_number)
+                if target_num < 1 or target_num > 10:  # Reasonable limit
+                    return JSONResponse(
+                        content={"error": "target_number must be between 1 and 10"},
+                        status_code=400
+                    )
+                is_timer_assignment = False
+            except ValueError:
+                return JSONResponse(
+                    content={"error": "target_number must be an integer or 'timer'"},
+                    status_code=400
+                )
+        
+        with get_db_connection() as conn:
+            # Get device label from device pool
+            cursor = conn.execute(
+                "SELECT label, device_type FROM device_pool WHERE hw_addr = ?",
+                (device_address,)
+            )
+            device_row = cursor.fetchone()
+            
+            if not device_row:
+                return JSONResponse(
+                    content={"error": f"Device {device_address} not found in device pool"},
+                    status_code=404
+                )
+            
+            device_label = device_row['label']
+            device_type = device_row['device_type']
+            
+            # Handle timer assignment (special case)
+            if is_timer_assignment or device_type == 'timer':
+                # Update bridge configuration with timer
+                conn.execute("""
+                    INSERT OR REPLACE INTO bridge_configurations 
+                    (bridge_id, stage_config_id, timer_address)
+                    VALUES (?, COALESCE((SELECT stage_config_id FROM bridge_configurations WHERE bridge_id = ?), 1), ?)
+                """, (bridge_id, bridge_id, device_address))
+                
+                conn.commit()
+                await _update_json_config_from_db(bridge_id)
+                
+                return JSONResponse({
+                    "status": "success",
+                    "message": f"{device_label} assigned as bridge timer",
+                    "assignment": {
+                        "device_address": device_address,
+                        "device_label": device_label,
+                        "target": "timer",
+                        "bridge_id": bridge_id
+                    }
+                })
+            else:
+                # Handle sensor assignment to target
+                if target_num is None:
+                    return JSONResponse(
+                        content={"error": "target_number required for sensor assignment"},
+                        status_code=400
+                    )
+                
+                # Remove any existing assignment for this sensor (ensure 1:1 mapping)
+                conn.execute(
+                    "DELETE FROM bridge_target_assignments WHERE bridge_id = ? AND sensor_address = ?",
+                    (bridge_id, device_address)
+                )
+                
+                # Remove any existing sensor from this target
+                conn.execute(
+                    "DELETE FROM bridge_target_assignments WHERE bridge_id = ? AND target_number = ?",
+                    (bridge_id, target_num)
+                )
+                
+                # Add new assignment
+                conn.execute("""
+                    INSERT INTO bridge_target_assignments 
+                    (bridge_id, target_number, sensor_address, sensor_label)
+                    VALUES (?, ?, ?, ?)
+                """, (bridge_id, target_num, device_address, device_label))
+            
+                conn.commit()
+                await _update_json_config_from_db(bridge_id)
+                
+                return JSONResponse(content={
+                    "status": "success",
+                    "message": f"{device_label} assigned to Target {target_num}",
+                    "assignment": {
+                        "device_address": device_address,
+                        "device_label": device_label,
+                        "device_type": device_type,
+                        "target_number": target_num,
+                        "bridge_id": bridge_id
+                    }
+                })
+        
+    except Exception as e:
+        logger.error(f"Failed to assign device: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to assign device: {str(e)}"},
+            status_code=500
+        )
+
+@app.delete("/api/admin/bridge/target/{target_number}/unassign")
+async def unassign_target(target_number: int, bridge_id: int = 1):
+    """Remove sensor assignment from a target"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.execute(
+                "SELECT sensor_address, sensor_label FROM bridge_target_assignments WHERE bridge_id = ? AND target_number = ?",
+                (bridge_id, target_number)
+            )
+            assignment = cursor.fetchone()
+            
+            if not assignment:
+                return JSONResponse(
+                    content={"error": f"No assignment found for Target {target_number}"},
+                    status_code=404
+                )
+            
+            # Remove the assignment
+            conn.execute(
+                "DELETE FROM bridge_target_assignments WHERE bridge_id = ? AND target_number = ?",
+                (bridge_id, target_number)
+            )
+            conn.commit()
+        
+        # Update JSON config
+        await _update_json_config_from_db(bridge_id)
+        
+        logger.info(f"Unassigned {assignment['sensor_label']} from Target {target_number}")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Target {target_number} unassigned",
+            "unassigned": {
+                "device_address": assignment['sensor_address'],
+                "device_label": assignment['sensor_label'],
+                "target_number": target_number
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to unassign target: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to unassign target: {str(e)}"},
+            status_code=500
+        )
+
+@app.delete("/api/admin/bridge/timer/unassign")
+async def unassign_timer(request: dict):
+    """Remove timer assignment from bridge"""
+    try:
+        bridge_id = request.get("bridge_id", 1)
+        
+        with get_db_connection() as conn:
+            # Get current timer assignment
+            cursor = conn.execute(
+                "SELECT timer_address FROM bridge_configurations WHERE bridge_id = ?",
+                (bridge_id,)
+            )
+            config = cursor.fetchone()
+            
+            if not config or not config['timer_address']:
+                return JSONResponse(
+                    content={"message": "No timer currently assigned"},
+                    status_code=200
+                )
+            
+            timer_address = config['timer_address']
+            
+            # Clear timer assignment
+            conn.execute(
+                "UPDATE bridge_configurations SET timer_address = NULL WHERE bridge_id = ?",
+                (bridge_id,)
+            )
+            conn.commit()
+        
+        # Update JSON config
+        await _update_json_config_from_db(bridge_id)
+        
+        logger.info(f"Unassigned timer {timer_address} from bridge {bridge_id}")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": "Timer unassigned from bridge",
+            "unassigned_timer": timer_address
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to unassign timer: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to unassign timer: {str(e)}"},
+            status_code=500
+        )
+
+@app.delete("/api/admin/bridge/sensors/unassign_all")
+async def unassign_all_sensors(request: dict):
+    """Remove all sensor assignments from bridge"""
+    try:
+        bridge_id = request.get("bridge_id", 1)
+        
+        with get_db_connection() as conn:
+            # Get current sensor assignments
+            cursor = conn.execute(
+                "SELECT sensor_address, sensor_label, target_number FROM bridge_target_assignments WHERE bridge_id = ?",
+                (bridge_id,)
+            )
+            assignments = cursor.fetchall()
+            
+            if not assignments:
+                return JSONResponse(
+                    content={"message": "No sensors currently assigned"},
+                    status_code=200
+                )
+            
+            # Clear all sensor assignments
+            conn.execute(
+                "DELETE FROM bridge_target_assignments WHERE bridge_id = ?",
+                (bridge_id,)
+            )
+            conn.commit()
+        
+        # Update JSON config
+        await _update_json_config_from_db(bridge_id)
+        
+        unassigned_list = [
+            {"address": a['sensor_address'], "label": a['sensor_label'], "target": a['target_number']} 
+            for a in assignments
+        ]
+        
+        logger.info(f"Unassigned {len(assignments)} sensors from bridge {bridge_id}")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"All {len(assignments)} sensors unassigned from bridge",
+            "unassigned_sensors": unassigned_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to unassign all sensors: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to unassign all sensors: {str(e)}"},
+            status_code=500
+        )
+
+@app.put("/api/admin/bridge/stage")
+async def change_bridge_stage(request: dict):
+    """Change bridge stage with optional assignment preservation"""
+    try:
+        stage_config_id = request.get("stage_config_id")
+        bridge_id = request.get("bridge_id", 1)
+        preserve_assignments = request.get("preserve_assignments", False)  # New parameter
+        
+        if not stage_config_id:
+            return JSONResponse(
+                content={"error": "stage_config_id is required"},
+                status_code=400
+            )
+        
+        with get_db_connection() as conn:
+            # Verify stage exists
+            cursor = conn.execute(
+                "SELECT name FROM stage_configs WHERE id = ?",
+                (stage_config_id,)
+            )
+            stage = cursor.fetchone()
+            
+            if not stage:
+                return JSONResponse(
+                    content={"error": f"Stage config {stage_config_id} not found"},
+                    status_code=404
+                )
+            
+            # Conditionally clear assignments based on parameter
+            if not preserve_assignments:
+                conn.execute("DELETE FROM bridge_target_assignments WHERE bridge_id = ?", (bridge_id,))
+                # Update bridge configuration with new stage and clear timer
+                conn.execute("""
+                    INSERT OR REPLACE INTO bridge_configurations 
+                    (bridge_id, stage_config_id, timer_address)
+                    VALUES (?, ?, NULL)
+                """, (bridge_id, stage_config_id))
+                log_msg = f"Changed bridge {bridge_id} to stage {stage_config_id} ({stage['name']}) and cleared all assignments"
+            else:
+                # Just update the stage, keep existing timer and assignments
+                conn.execute("""
+                    UPDATE bridge_configurations 
+                    SET stage_config_id = ?
+                    WHERE bridge_id = ?
+                """, (stage_config_id, bridge_id))
+                log_msg = f"Changed bridge {bridge_id} to stage {stage_config_id} ({stage['name']}) and preserved assignments"
+            
+            conn.commit()
+        
+        # Update JSON config 
+        await _update_json_config_from_db(bridge_id)
+        
+        logger.info(log_msg)
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Bridge stage changed to {stage['name']}" + ("" if preserve_assignments else " - all assignments cleared"),
+            "stage": {
+                "stage_config_id": stage_config_id,
+                "stage_name": stage['name']
+            },
+            "assignments_preserved": preserve_assignments
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to change bridge stage: {e}")
+        return JSONResponse(
+            content={"error": f"Failed to change bridge stage: {str(e)}"},
             status_code=500
         )
 

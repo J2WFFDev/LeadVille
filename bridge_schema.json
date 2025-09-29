@@ -1,0 +1,9 @@
+# Bridge Configuration Schema (bridge_device_config.json)
+# Purpose: Tell bridge which BLE addresses to listen for
+{
+  "timer": "60:09:C3:1F:DC:1A",          # Just MAC address
+  "sensors": [                           # Array of MAC addresses only
+    "EA:18:3D:6D:BA:E5",
+    "DB:10:38:B6:13:6B"
+  ]
+}
