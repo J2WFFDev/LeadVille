@@ -67,19 +67,9 @@ logger = logging.getLogger(__name__)
 try:
     # Prefer the verbose BLE parser for diagnostics; keep the original simple
     # parse_5561 available to preserve existing behavior used throughout the
-    # bridge. The verbose parser can persist parsed frames for analysis.
-    try:
-        from impact_bridge.ble.wtvb_parse import scan_and_parse, parse_flag61_frame, parse_wtvb32_frame  # type: ignore
-    except Exception:
-        # If the ble package import style isn't available, try the flat import
-        from impact_bridge.wtvb_parse import scan_and_parse, parse_flag61_frame, parse_wtvb32_frame  # type: ignore
-
-    # Import the simple parser under the expected name so existing code keeps working
-    try:
-        from impact_bridge.ble.wtvb_parse_simple import parse_5561
-    except Exception:
-        # Fallback if package paths differ
-        from impact_bridge.wtvb_parse_simple import parse_5561
+    # Import parsers from the new consolidated parsers package
+    from impact_bridge.ble.parsers import scan_and_parse, parse_flag61_frame, parse_wtvb32_frame, parse_5561
+    from impact_bridge.paths import CONFIG_DB, RUNTIME_DB, SAMPLES_DB
     from impact_bridge.shot_detector import ShotDetector
     from impact_bridge.timing_calibration import RealTimeTimingCalibrator
     from impact_bridge.enhanced_impact_detection import EnhancedImpactDetector
@@ -118,10 +108,9 @@ class LeadVilleBridge:
         
         # Initialize database for Bridge-assigned sensor lookups
         try:
-            project_root = Path(__file__).parent.parent.parent
             db_config = DatabaseConfig(
-                dir=str(project_root / "db"),
-                file="leadville.db",
+                dir=str(CONFIG_DB.parent),
+                file=CONFIG_DB.name,
                 enable_ingest=True,
                 echo=False
             )
@@ -261,19 +250,9 @@ class LeadVilleBridge:
         """Get MAC addresses of devices assigned to this Bridge"""
         try:
             # Use raw SQLite to test the database connection
-            # Note: when running as symlink, __file__ points to symlink location 
-            # so we need to find the actual project root
-            if "projects/LeadVille" in str(__file__):
-                # Extract the project root from the file path
-                project_root = Path(str(__file__).split("projects/LeadVille")[0]) / "projects" / "LeadVille"
-            else:
-                # Fallback for other scenarios
-                project_root = Path(__file__).parent.parent.parent
+            # Use canonical database path for bridge assignments (read-only)
+            db_path = CONFIG_DB
             
-            db_path = project_root / "db" / "leadville.db"
-            
-            self.logger.info(f"__file__: {__file__}")
-            self.logger.info(f"project_root: {project_root}")
             self.logger.info(f"Attempting to query database at: {db_path}")
             self.logger.info(f"Database file exists: {db_path.exists()}")
             
@@ -303,8 +282,8 @@ class LeadVilleBridge:
             # If we found a bridge with stage assignment, try the SQLAlchemy query
             if bridge_row and bridge_row[2]:  # current_stage_id exists
                 db_config = DatabaseConfig(
-                    dir=str(project_root / "db"),
-                    file="leadville.db",
+                    dir=str(CONFIG_DB.parent),
+                    file=CONFIG_DB.name,
                     enable_ingest=True,
                     echo=False
                 )
@@ -724,41 +703,6 @@ class LeadVilleBridge:
         except Exception as e:
             self.logger.error(f"BT50 processing failed: {e}")
             
-    async def reset_ble(self):
-        """Reset BLE connections before starting"""
-        self.logger.info("🔄 Starting BLE reset")
-        
-        try:
-            import subprocess
-            
-            # Simple disconnect commands
-            devices = [BT50_SENSOR_MAC, AMG_TIMER_MAC]
-            for mac in devices:
-                try:
-                    subprocess.run(['bluetoothctl', 'disconnect', mac], 
-                                 capture_output=True, text=True, timeout=3)
-                    self.logger.debug(f"Attempted disconnect of {mac}")
-                except Exception as e:
-                    self.logger.debug(f"Disconnect {mac} failed: {e}")
-            
-            # Quick adapter cycle
-            try:
-                subprocess.run(['sudo', 'hciconfig', 'hci0', 'down'], 
-                             capture_output=True, timeout=2)
-                await asyncio.sleep(0.5)
-                subprocess.run(['sudo', 'hciconfig', 'hci0', 'up'], 
-                             capture_output=True, timeout=2)
-                self.logger.info("🔧 Reset Bluetooth adapter")
-            except Exception as e:
-                self.logger.warning(f"Adapter reset failed: {e}")
-            
-            # Brief wait for stabilization
-            await asyncio.sleep(1)
-            self.logger.info("✓ BLE reset complete")
-            
-        except Exception as e:
-            self.logger.error(f"BLE reset failed: {e}")
-    
     async def reset_ble(self):
         """Reset BLE connections before starting"""
         self.logger.info("🔄 Starting BLE reset")

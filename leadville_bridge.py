@@ -67,20 +67,9 @@ logger = logging.getLogger(__name__)
 # Import the impact bridge components
 try:
     # Prefer the verbose BLE parser for diagnostics; keep the original simple
-    # parse_5561 available to preserve existing behavior used throughout the
-    # bridge. The verbose parser can persist parsed frames for analysis.
-    try:
-        from impact_bridge.ble.wtvb_parse import scan_and_parse, parse_flag61_frame, parse_wtvb32_frame  # type: ignore
-    except Exception:
-        # If the ble package import style isn't available, try the flat import
-        from impact_bridge.wtvb_parse import scan_and_parse, parse_flag61_frame, parse_wtvb32_frame  # type: ignore
-
-    # Import the simple parser under the expected name so existing code keeps working
-    try:
-        from impact_bridge.ble.wtvb_parse_simple import parse_5561
-    except Exception:
-        # Fallback if package paths differ
-        from impact_bridge.wtvb_parse_simple import parse_5561
+    # Import parsers from the new consolidated parsers package
+    from impact_bridge.ble.parsers import scan_and_parse, parse_flag61_frame, parse_wtvb32_frame, parse_5561
+    from impact_bridge.paths import CONFIG_DB, RUNTIME_DB, SAMPLES_DB
     from impact_bridge.shot_detector import ShotDetector
     from impact_bridge.timing_calibration import RealTimeTimingCalibrator
     from impact_bridge.enhanced_impact_detection import EnhancedImpactDetector
@@ -119,10 +108,9 @@ class LeadVilleBridge:
         
         # Initialize database for Bridge-assigned sensor lookups
         try:
-            project_root = Path(__file__).parent.parent.parent
             db_config = DatabaseConfig(
-                dir=str(project_root / "db"),
-                file="leadville.db",
+                dir=str(CONFIG_DB.parent),
+                file=CONFIG_DB.name,
                 enable_ingest=True,
                 echo=False
             )
@@ -288,19 +276,9 @@ class LeadVilleBridge:
                 self.logger.info("ℹ️ Bridge config file not found, checking database...")
 
             # SECOND: Try database approach (existing logic)
-            # Note: when running as symlink, __file__ points to symlink location 
-            # so we need to find the actual project root
-            if "projects/LeadVille" in str(__file__):
-                # Extract the project root from the file path
-                project_root = Path(str(__file__).split("projects/LeadVille")[0]) / "projects" / "LeadVille"
-            else:
-                # Fallback for other scenarios
-                project_root = Path(__file__).parent.parent.parent
+            # Use canonical database path for bridge assignments (read-only)
+            db_path = CONFIG_DB
             
-            db_path = project_root / "db" / "leadville.db"
-            
-            self.logger.info(f"__file__: {__file__}")
-            self.logger.info(f"project_root: {project_root}")
             self.logger.info(f"Attempting to query database at: {db_path}")
             self.logger.info(f"Database file exists: {db_path.exists()}")
             
@@ -332,8 +310,8 @@ class LeadVilleBridge:
             # If we found a bridge with stage assignment, try the SQLAlchemy query
             if bridge_row and bridge_row[2]:  # current_stage_id exists
                 db_config = DatabaseConfig(
-                    dir=str(project_root / "db"),
-                    file="leadville.db",
+                    dir=str(CONFIG_DB.parent),
+                    file=CONFIG_DB.name,
                     enable_ingest=True,
                     echo=False
                 )
@@ -734,103 +712,6 @@ class LeadVilleBridge:
         except Exception as e:
             self.logger.error(f"Multi-sensor calibration data collection failed: {e}")
             
-    async def perform_startup_calibration(self):
-        """Perform automatic startup calibration (legacy single-sensor method)"""
-        self.logger.info("🎯 Starting automatic calibration...")
-        self.logger.info(f"Calibration: {DEFAULT_CALIBRATION_SAMPLES} samples, auto=True")
-        self.logger.info("================================")
-        print("🎯 Performing startup calibration...")
-        print("📋 Please ensure sensor is STATIONARY during calibration")
-        print("⏱️  Collecting samples for baseline establishment...")
-        
-        # Reset calibration state
-        self.calibration_samples = []
-        self.collecting_calibration = True
-        
-        try:
-            await self.bt50_client.start_notify(BT50_SENSOR_UUID, self.calibration_notification_handler)
-            
-            # Wait for calibration to complete
-            start_time = time.time()
-            timeout = dev_config.get_calibration_timeout() if COMPONENTS_AVAILABLE else 30
-            
-            while self.collecting_calibration and (time.time() - start_time) < timeout:
-                await asyncio.sleep(0.1)
-                if len(self.calibration_samples) >= DEFAULT_CALIBRATION_SAMPLES:
-                    break
-            
-            if len(self.calibration_samples) < DEFAULT_CALIBRATION_SAMPLES:
-                self.logger.error(f"Calibration timeout - only {len(self.calibration_samples)} samples collected")
-                return False
-                
-            # Calculate baseline using outlier-filtered median (more robust)
-            # Use scaled values like TinTown  
-            vx_values = [s['vx'] for s in self.calibration_samples]
-            vy_values = [s['vy'] for s in self.calibration_samples]
-            vz_values = [s['vz'] for s in self.calibration_samples]
-            
-            # Filter outliers using interquartile range method
-            def filter_outliers(values):
-                if len(values) < 10:
-                    return values
-                q1 = statistics.quantiles(values, n=4)[0]
-                q3 = statistics.quantiles(values, n=4)[2]
-                iqr = q3 - q1
-                lower_bound = q1 - 1.5 * iqr
-                upper_bound = q3 + 1.5 * iqr
-                return [v for v in values if lower_bound <= v <= upper_bound]
-            
-            vx_filtered = filter_outliers(vx_values)
-            vy_filtered = filter_outliers(vy_values)  
-            vz_filtered = filter_outliers(vz_values)
-            
-            self.baseline_x = statistics.median(vx_filtered) if vx_filtered else statistics.median(vx_values)
-            self.baseline_y = statistics.median(vy_filtered) if vy_filtered else statistics.median(vy_values)
-            self.baseline_z = statistics.median(vz_filtered) if vz_filtered else statistics.median(vz_values)
-            
-            # Calculate noise characteristics using filtered values
-            noise_x = statistics.stdev(vx_filtered) if len(set(vx_filtered)) > 1 else 0
-            noise_y = statistics.stdev(vy_filtered) if len(set(vy_filtered)) > 1 else 0
-            noise_z = statistics.stdev(vz_filtered) if len(set(vz_filtered)) > 1 else 0
-            
-            # Initialize shot detector with calibrated baseline
-            if COMPONENTS_AVAILABLE:
-                min_dur, max_dur = dev_config.get_shot_duration_range()
-                self.shot_detector = ShotDetector(
-                    baseline_x=0,  # Using pre-corrected samples, so baseline is 0
-                    threshold=dev_config.get_shot_threshold(),
-                    min_duration=min_dur,
-                    max_duration=max_dur,
-                    min_interval_seconds=dev_config.get_shot_interval()
-                )
-                self.logger.info("✓ Shot detector initialized with calibrated baseline")
-            
-            self.calibration_complete = True
-            
-            # Log calibration results in TinTown format with appropriate precision
-            self.logger.info(f"Calibration complete: X={self.baseline_x:.1f}, Y={self.baseline_y:.1f}, Z={self.baseline_z:.1f}")
-            self.logger.info("✅ Calibration completed successfully!")
-            self.logger.info(f"📊 Baseline established: X={self.baseline_x:.1f}, Y={self.baseline_y:.1f}, Z={self.baseline_z:.1f}")
-            self.logger.info(f"📈 Noise levels: X=±{noise_x:.3f}, Y=±{noise_y:.3f}, Z=±{noise_z:.3f}")
-            self.logger.info(f"🎯 Impact threshold: 25 counts from baseline")
-            
-            # Reset enhanced impact detector to clear any residual state
-            if self.enhanced_impact_detector:
-                self.enhanced_impact_detector.reset()
-            
-            # Switch to normal notification handler
-            await self.bt50_client.stop_notify(BT50_SENSOR_UUID)
-            await self.bt50_client.start_notify(BT50_SENSOR_UUID, self.bt50_notification_handler)
-            
-            self.logger.info("📝 Status: Sensor 12:E3 - Listening")
-            self.logger.info("BT50 sensor and impact notifications enabled")
-            self.logger.info("-----------------------------🎯Bridge ready for String🎯-----------------------------")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Calibration failed: {e}")
-            return False
-            
     async def amg_notification_handler(self, characteristic, data):
         hex_data = data.hex()
         self.logger.debug(f"AMG notification: {hex_data}")
@@ -1088,9 +969,20 @@ class LeadVilleBridge:
                     
                     # Log impact to database
                     try:
-                        db_path = os.path.join(os.path.dirname(__file__), "leadville.db")
+                        db_path = str(RUNTIME_DB)
                         conn = sqlite3.connect(db_path)
                         cursor = conn.cursor()
+                        cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS sensor_events (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            ts_utc TEXT NOT NULL,
+                            sensor_id TEXT NOT NULL,
+                            magnitude REAL,
+                            features_json TEXT,
+                            created_at TEXT NOT NULL
+                        );
+                        """)
+                        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sensor_events_ts ON sensor_events(ts_utc)")
                         
                         # Get sensor MAC from characteristic  
                         sensor_mac = characteristic.service.device.address.replace(':', '').upper()
@@ -1155,41 +1047,6 @@ class LeadVilleBridge:
         except Exception as e:
             self.logger.error(f"BT50 processing failed: {e}")
             
-    async def reset_ble(self):
-        """Reset BLE connections before starting"""
-        self.logger.info("🔄 Starting BLE reset")
-        
-        try:
-            import subprocess
-            
-            # Simple disconnect commands
-            devices = [BT50_SENSOR_MAC, AMG_TIMER_MAC]
-            for mac in devices:
-                try:
-                    subprocess.run(['bluetoothctl', 'disconnect', mac], 
-                                 capture_output=True, text=True, timeout=3)
-                    self.logger.debug(f"Attempted disconnect of {mac}")
-                except Exception as e:
-                    self.logger.debug(f"Disconnect {mac} failed: {e}")
-            
-            # Quick adapter cycle
-            try:
-                subprocess.run(['sudo', 'hciconfig', 'hci0', 'down'], 
-                             capture_output=True, timeout=2)
-                await asyncio.sleep(0.5)
-                subprocess.run(['sudo', 'hciconfig', 'hci0', 'up'], 
-                             capture_output=True, timeout=2)
-                self.logger.info("🔧 Reset Bluetooth adapter")
-            except Exception as e:
-                self.logger.warning(f"Adapter reset failed: {e}")
-            
-            # Brief wait for stabilization
-            await asyncio.sleep(1)
-            self.logger.info("✓ BLE reset complete")
-            
-        except Exception as e:
-            self.logger.error(f"BLE reset failed: {e}")
-    
     async def reset_ble(self):
         """Reset BLE connections before starting"""
         self.logger.info("🔄 Starting BLE reset")

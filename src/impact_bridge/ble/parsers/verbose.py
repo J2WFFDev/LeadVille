@@ -7,7 +7,7 @@ investigation. It recognizes:
 - 32-byte WTVB frames (older/alternate framing where axes are at offsets)
 
 The parser is intentionally verbose (logging debug information) and can
-optionally persist parsed samples to `logs/bt50_samples.db` for offline
+optionally persist parsed samples to `db/bt50_samples.db` for offline
 inspection.
 """
 
@@ -20,10 +20,9 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+from impact_bridge.paths import SAMPLES_DB as DB_PATH
 
-DB_PATH = Path(__file__).resolve().parents[2] / "db" / "bt50_samples.db"
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+logger = logging.getLogger(__name__)
 
 
 def _ensure_db(path: Path = DB_PATH) -> None:
@@ -103,7 +102,7 @@ def parse_flag61_frame(frame: bytes, write_db: bool = False) -> Optional[Dict]:
 
     Returns a dict with the parsed register values (integers) and human units
     where applicable. If `write_db` is True the raw register values are written
-    to `logs/bt50_samples.db` for later inspection.
+    to `db/bt50_samples.db` for later inspection.
     """
     if not frame or len(frame) < 28:
         logger.debug("parse_flag61_frame: frame too short")
@@ -239,4 +238,3 @@ def scan_and_parse(payload: bytes, write_db: bool = False) -> List[Dict]:
             i += 1
 
     return results
-
