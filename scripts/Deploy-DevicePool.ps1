@@ -3,7 +3,7 @@
 # Deploys new pool system to Pi and runs migration
 
 param(
-    [string]$PiHost = "jrwest@192.168.1.124",
+    [string]$PiHost = "jrwest@pitts",
     [string]$ProjectPath = "/home/jrwest/projects/LeadVille"
 )
 
@@ -78,12 +78,12 @@ Start-Sleep -Seconds 5
 
 # Test API endpoints
 Write-Host "🧪 Testing new API endpoints..." -ForegroundColor Yellow
-$healthResponse = curl -s http://192.168.1.124:8001/api/health 2>$null
+$healthResponse = curl -s http://pitts:8001/api/health 2>$null
 if ($healthResponse) {
     Write-Host "✅ FastAPI service is running" -ForegroundColor Green
     
     # Test device pool endpoint
-    $poolResponse = curl -s http://192.168.1.124:8001/api/admin/pool/devices 2>$null
+    $poolResponse = curl -s http://pitts:8001/api/admin/pool/devices 2>$null
     if ($poolResponse) {
         Write-Host "✅ Device pool API is working" -ForegroundColor Green
     } else {
@@ -97,6 +97,6 @@ if ($healthResponse) {
 Write-Host "🎉 Device Pool Management System deployment completed!" -ForegroundColor Green
 Write-Host ""
 Write-Host "📋 Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Test device discovery: http://192.168.1.124:5173/docs/dashboard/unified_bridge_config.html"
-Write-Host "  2. Check device pool API: http://192.168.1.124:8001/api/admin/pool/devices"
-Write-Host "  3. View API docs: http://192.168.1.124:8001/docs"
+Write-Host "  1. Test device discovery: http://pitts:5173/docs/dashboard/unified_bridge_config.html"
+Write-Host "  2. Check device pool API: http://pitts:8001/api/admin/pool/devices"
+Write-Host "  3. View API docs: http://pitts:8001/docs"

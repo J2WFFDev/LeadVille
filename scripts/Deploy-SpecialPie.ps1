@@ -8,7 +8,7 @@
 #>
 
 param(
-    [string]$PiHost = "jrwest@192.168.1.125",
+    [string]$PiHost = "jrwest@pitts",
     [string]$PiProjectPath = "/home/jrwest/projects/LeadVille",
     [switch]$RestartServices = $true
 )
@@ -147,8 +147,8 @@ except Exception as e:
     Write-Host "🎉 SpecialPie Timer Integration Deployment Complete!" -ForegroundColor Green
     Write-Host ""
     Write-Host "📋 Next Steps:" -ForegroundColor Cyan
-    Write-Host "1. Test SpecialPie device discovery: http://192.168.1.125:8001/api/admin/devices/discover" -ForegroundColor White
-    Write-Host "2. Check SpecialPie API: http://192.168.1.125:8001/api/admin/specialpie/status" -ForegroundColor White
+    Write-Host "1. Test SpecialPie device discovery: http://pitts:8001/api/admin/devices/discover" -ForegroundColor White
+    Write-Host "2. Check SpecialPie API: http://pitts:8001/api/admin/specialpie/status" -ForegroundColor White
     Write-Host "3. Pair a SpecialPie timer through the device manager UI" -ForegroundColor White
     Write-Host "4. Connect and monitor shot data from the timer" -ForegroundColor White
     Write-Host ""

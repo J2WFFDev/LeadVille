@@ -257,6 +257,6 @@ python3 inspect_all_databases.py
 python3 inspect_all_databases.py --quick
 
 # Copy to Pi and run
-scp inspect_all_databases.py jrwest@192.168.1.125:/home/jrwest/projects/LeadVille/
-ssh jrwest@192.168.1.125 "cd /home/jrwest/projects/LeadVille && python3 inspect_all_databases.py"
+scp inspect_all_databases.py jrwest@pitts:/home/jrwest/projects/LeadVille/
+ssh jrwest@pitts "cd /home/jrwest/projects/LeadVille && python3 inspect_all_databases.py"
 ```

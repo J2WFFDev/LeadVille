@@ -16,12 +16,12 @@ jobs:
           mkdir -p ~/.ssh
           echo "$PI_DEPLOY_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H 192.168.1.124 >> ~/.ssh/known_hosts || true
+          ssh-keyscan -H pitts >> ~/.ssh/known_hosts || true
       - name: Pull on Pi
         env:
           SSH_AUTH_SOCK: /tmp/ssh-agent.sock
         run: |
-          ssh -o StrictHostKeyChecking=yes jrwest@192.168.1.124 '
+          ssh -o StrictHostKeyChecking=yes jrwest@pitts '
             set -e
             cd /home/jrwest/projects/LeadVille
             git fetch origin

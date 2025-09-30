@@ -37,7 +37,7 @@ This document provides complete documentation of AMG Commander timer integration
 ### Test Hardware Configuration
 - **Timer 1**: MAC `60:09:C3:1F:DC:1A` (Confirmed working)
 - **Timer 2**: MAC `60:09:C3:84:7F:F4` (Confirmed working)
-- **Pi Host**: Raspberry Pi at `192.168.1.125` (user: jrwest)
+- **Pi Host**: Raspberry Pi at `pitts` (user: jrwest)
 
 ---
 

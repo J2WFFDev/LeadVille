@@ -832,8 +832,8 @@ class LeadVilleBridge:
         capture process queue and uses WAL mode for safe concurrent writes.
         """
         try:
-            # Force the exact database path to avoid any resolution issues
-            db_path = Path("/home/jrwest/projects/LeadVille/db/leadville_runtime.db")
+            # Use canonical database path from paths module
+            db_path = RUNTIME_DB
             self.logger.debug(f"Using database path: {db_path}")
             
             # Ensure parent directory exists

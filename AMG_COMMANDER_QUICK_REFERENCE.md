@@ -7,7 +7,7 @@
 ### Test Your AMG Timer
 ```bash
 # SSH to Pi and run comprehensive test
-ssh jrwest@192.168.1.125
+ssh jrwest@pitts
 cd /home/jrwest/projects/LeadVille
 python3 amg_enhanced_test_comprehensive.py --mac 60:09:C3:1F:DC:1A
 ```
@@ -15,16 +15,16 @@ python3 amg_enhanced_test_comprehensive.py --mac 60:09:C3:1F:DC:1A
 ### API Quick Commands
 ```bash
 # Check timer status
-curl http://192.168.1.125:8001/api/admin/amg/timer/60:09:C3:1F:DC:1A/status
+curl http://pitts:8001/api/admin/amg/timer/60:09:C3:1F:DC:1A/status
 
 # Remote start (timer beeps)
-curl -X POST http://192.168.1.125:8001/api/admin/amg/timer/60:09:C3:1F:DC:1A/remote-start
+curl -X POST http://pitts:8001/api/admin/amg/timer/60:09:C3:1F:DC:1A/remote-start
 
 # Set sensitivity to 7
-curl -X POST http://192.168.1.125:8001/api/admin/amg/timer/60:09:C3:1F:DC:1A/sensitivity/7
+curl -X POST http://pitts:8001/api/admin/amg/timer/60:09:C3:1F:DC:1A/sensitivity/7
 
 # Start shot monitoring
-curl -X POST http://192.168.1.125:8001/api/admin/amg/timer/60:09:C3:1F:DC:1A/monitoring/start
+curl -X POST http://pitts:8001/api/admin/amg/timer/60:09:C3:1F:DC:1A/monitoring/start
 ```
 
 ## 🔧 Protocol Essentials
@@ -62,17 +62,17 @@ curl -X POST http://192.168.1.125:8001/api/admin/amg/timer/60:09:C3:1F:DC:1A/mon
 ### Service Check
 ```bash
 # Check FastAPI is running
-curl http://192.168.1.125:8001/api/health
+curl http://pitts:8001/api/health
 
 # Restart if needed
-ssh jrwest@192.168.1.125 "sudo fuser -k 8001/tcp"
-ssh jrwest@192.168.1.125 "cd /home/jrwest/projects/LeadVille && nohup python3 -m uvicorn src.impact_bridge.fastapi_backend:app --host 0.0.0.0 --port 8001 --reload > fastapi.log 2>&1 &"
+ssh jrwest@pitts "sudo fuser -k 8001/tcp"
+ssh jrwest@pitts "cd /home/jrwest/projects/LeadVille && nohup python3 -m uvicorn src.impact_bridge.fastapi_backend:app --host 0.0.0.0 --port 8001 --reload > fastapi.log 2>&1 &"
 ```
 
 ### Bluetooth Check
 ```bash
-ssh jrwest@192.168.1.125 "bluetoothctl power on"
-ssh jrwest@192.168.1.125 "bluetoothctl discoverable on"
+ssh jrwest@pitts "bluetoothctl power on"
+ssh jrwest@pitts "bluetoothctl discoverable on"
 ```
 
 ## 📁 Key Files

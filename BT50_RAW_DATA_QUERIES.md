@@ -27,7 +27,7 @@ CREATE TABLE bt50_samples (
 ## 🔗 **Connection Command**
 
 ```bash
-ssh jrwest@192.168.1.125
+ssh jrwest@pitts
 cd /home/jrwest/projects/LeadVille
 sqlite3 db/leadville_runtime.db
 ```

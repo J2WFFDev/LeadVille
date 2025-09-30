@@ -16,7 +16,7 @@ Connecting to the Pi
 Example `~/.ssh/config` entry:
 
     Host leadville-pi
-        HostName 192.168.1.124
+        HostName pitts
         User Rpi
         IdentityFile ~/.ssh/id_rsa_leadville
 
@@ -31,7 +31,7 @@ To make it easier for contributors and automated agents, we recommend adding a l
 Example `~/.ssh/config` entry to add locally (do NOT commit this file):
 
     Host leadville-pi
-        HostName 192.168.1.124     # <replace-with-your-pi-ip-or-hostname>
+        HostName pitts     # <replace-with-your-pi-hostname-or-ip>
         User rpi                   # <replace-with-your-pi-user>
         IdentityFile ~/.ssh/id_rsa_leadville
         IdentitiesOnly yes
