@@ -273,7 +273,7 @@ export const ConsolePage = () => {
       {/* Fixed Footer */}
       <div className="bg-gray-200 border-t px-4 py-2 text-xs text-gray-600">
         <div className="flex justify-between items-center">
-          <span>WebSocket: ws://192.168.1.124:8001/ws/logs</span>
+          <span>WebSocket: ws://pitts:8001/ws/logs</span>
           <span>
             {isPaused ? 'Logging paused' : 'Live streaming'} • 
             Auto-scroll: {autoScroll ? 'ON' : 'OFF'}

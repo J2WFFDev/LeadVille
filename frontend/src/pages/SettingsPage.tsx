@@ -145,7 +145,7 @@ export const SettingsPage: React.FC = () => {
                       </label>
                       <input
                         type="text"
-                        defaultValue="ws://192.168.1.124:8001"
+                        defaultValue="ws://pitts:8001"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
                         readOnly
                       />

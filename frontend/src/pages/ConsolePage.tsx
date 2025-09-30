@@ -507,7 +507,7 @@ export const ConsolePage = () => {
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>WebSocket: ws://192.168.1.124:8001/ws/logs</span>
+          <span>WebSocket: ws://pitts:8001/ws/logs</span>
           <span>Live streaming • Manual scroll</span>
         </div>
       </div>

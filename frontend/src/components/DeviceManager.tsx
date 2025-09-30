@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { endpointConfig } from '../config/endpoints';
 
 interface Device {
   id?: number;
@@ -50,7 +51,7 @@ export const DeviceManager: React.FC = () => {
   const loadPairedDevices = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.1.124:8001/api/admin/devices');
+      const response = await fetch(`${endpointConfig.getApiUrl()}/admin/devices`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       
       const data = await response.json();
@@ -64,7 +65,7 @@ export const DeviceManager: React.FC = () => {
 
   const loadAssignments = async () => {
     try {
-      const response = await fetch('http://192.168.1.124:8001/api/admin/devices/assignments');
+      const response = await fetch(`${endpointConfig.getApiUrl()}/admin/devices/assignments`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       
       const data = await response.json();
@@ -93,7 +94,7 @@ export const DeviceManager: React.FC = () => {
     }, 1000);
     
     try {
-      const response = await fetch('http://192.168.1.124:8001/api/admin/devices/discover', {
+      const response = await fetch(`${endpointConfig.getApiUrl()}/admin/devices/discover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ duration: 45 }) // Updated to match actual scan time
@@ -127,7 +128,7 @@ export const DeviceManager: React.FC = () => {
 
   const pairDevice = async (address: string, label: string) => {
     try {
-      const response = await fetch('http://192.168.1.124:8001/api/admin/devices/pair', {
+      const response = await fetch(`${endpointConfig.getApiUrl()}/admin/devices/pair`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mac_address: address, label })
@@ -150,7 +151,7 @@ export const DeviceManager: React.FC = () => {
 
   const removeDevice = async (sensorId: number) => {
     try {
-      const response = await fetch(`http://192.168.1.124:8001/api/admin/devices/${sensorId}`, {
+      const response = await fetch(`${endpointConfig.getApiUrl()}/admin/devices/${sensorId}`, {
         method: 'DELETE'
       });
       

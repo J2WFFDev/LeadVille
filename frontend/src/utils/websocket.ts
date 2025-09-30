@@ -3,6 +3,8 @@
  * Connects to the Python WebSocket server for timer and sensor events
  */
 
+import { endpointConfig } from '../config/endpoints';
+
 export interface TimerEvent {
   type: 'timer_event';
   event_type: string;
@@ -61,7 +63,7 @@ export class LeadVilleWebSocketClient {
 
   constructor(config: Partial<WebSocketConfig> = {}) {
     this.config = {
-      url: 'ws://192.168.1.124:8001/ws/live',
+      url: endpointConfig.getWebSocketUrl('live'),
       reconnectInterval: 3000,
       maxReconnectAttempts: 10,
       ...config

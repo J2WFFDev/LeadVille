@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { endpointConfig } from '../config/endpoints';
 
 interface ConnectedDevice {
   address: string;
@@ -30,7 +31,7 @@ export const useSensorData = () => {
     setError(null);
     
     try {
-      const response = await fetch('http://192.168.1.124:8001/api/connected-devices');
+      const response = await fetch(`${endpointConfig.getApiUrl()}/connected-devices`);
       if (!response.ok) {
         throw new Error(`Failed to load devices: ${response.statusText}`);
       }
@@ -141,7 +142,7 @@ export const useSensorData = () => {
     let websocket: WebSocket | null = null;
     
     try {
-      websocket = new WebSocket('ws://192.168.1.124:8001/ws');
+      websocket = new WebSocket(endpointConfig.getWebSocketUrl(''));
       
       websocket.onmessage = (event) => {
         const data = JSON.parse(event.data);

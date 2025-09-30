@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { endpointConfig } from '../config/endpoints';
 
 interface LogEntry {
   timestamp: string;
@@ -97,9 +98,9 @@ export const useWebSocketLogs = (maxLines: number = 1000): UseWebSocketLogsRetur
   // Connect to native WebSocket server
   const connectWebSocket = () => {
     try {
-      console.log('🔌 Attempting WebSocket connection to ws://192.168.1.124:8001/ws/logs');
+      console.log(`🔌 Attempting WebSocket connection to ${endpointConfig.getWebSocketUrl('logs')}`);
       
-      const ws = new WebSocket('ws://192.168.1.124:8001/ws/logs');
+      const ws = new WebSocket(endpointConfig.getWebSocketUrl('logs'));
       
       ws.onopen = () => {
         console.log('✅ WebSocket connected successfully!');
@@ -168,7 +169,7 @@ export const useWebSocketLogs = (maxLines: number = 1000): UseWebSocketLogsRetur
   // Poll logs from REST API as fallback
   const pollLogs = async () => {
     try {
-      const response = await fetch('http://192.168.1.124:8001/api/logs?limit=50');
+      const response = await fetch(`${endpointConfig.getApiUrl()}/logs?limit=50`);
       if (response.ok) {
         const data = await response.json();
         

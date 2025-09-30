@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { endpointConfig } from '../config/endpoints';
 
 interface Target {
   target_number: number;
@@ -34,7 +35,7 @@ export const useStageConfig = () => {
     setError(null);
     
     try {
-      const response = await fetch('http://192.168.1.124:8001/api/stages');
+      const response = await fetch(`${endpointConfig.getApiUrl()}/stages`);
       if (!response.ok) {
         throw new Error(`Failed to load stages: ${response.statusText}`);
       }
@@ -56,7 +57,7 @@ export const useStageConfig = () => {
     setError(null);
     
     try {
-      const response = await fetch(`http://192.168.1.124:8001/api/stages/${league}/${stageName}`);
+      const response = await fetch(`${endpointConfig.getApiUrl()}/stages/${league}/${stageName}`);
       if (!response.ok) {
         throw new Error(`Failed to load stage: ${response.statusText}`);
       }
