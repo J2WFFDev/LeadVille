@@ -10,17 +10,29 @@ export interface EndpointConfig {
 }
 
 class EndpointConfigImpl implements EndpointConfig {
-  private readonly isDevelopment: boolean;
-  private readonly baseHost: string;
-  private readonly apiPort: number;
+  private _isDevelopment?: boolean;
+  private _baseHost?: string;
+  private readonly apiPort: number = 8001;
 
-  constructor() {
-    // Detect environment - in development, we might be running on localhost
-    this.isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    // Use pitts hostname for production, localhost for development
-    this.baseHost = this.isDevelopment ? 'localhost' : 'pitts';
-    this.apiPort = 8001;
+  private get isDevelopment(): boolean {
+    if (this._isDevelopment === undefined) {
+      // Safely detect environment - fallback to production if window is not available
+      try {
+        this._isDevelopment = typeof window !== 'undefined' && 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      } catch {
+        this._isDevelopment = false; // Default to production if window access fails
+      }
+    }
+    return this._isDevelopment;
+  }
+
+  private get baseHost(): string {
+    if (this._baseHost === undefined) {
+      // Use pitts hostname for production, localhost for development
+      this._baseHost = this.isDevelopment ? 'localhost' : 'pitts';
+    }
+    return this._baseHost;
   }
 
   getBaseUrl(): string {
