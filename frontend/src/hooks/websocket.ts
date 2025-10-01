@@ -3,8 +3,6 @@
  * Connects to the Python WebSocket server for timer and sensor events
  */
 
-import { endpointConfig } from '../config/endpoints';
-
 export interface TimerEvent {
   type: 'timer_event';
   event_type: string;
@@ -62,16 +60,8 @@ export class LeadVilleWebSocketClient {
   private onErrorHandlers: ((error: Event) => void)[] = [];
 
   constructor(config: Partial<WebSocketConfig> = {}) {
-    // Simple fallback URL in case endpointConfig fails
-    let wsUrl = 'ws://pitts:8001/ws/live';
-    try {
-      wsUrl = endpointConfig.getWebSocketUrl('live');
-    } catch (error) {
-      console.warn('Failed to get WebSocket URL from config, using fallback:', error);
-    }
-    
     this.config = {
-      url: wsUrl,
+      url: 'ws://pitts:8001/ws/live',
       reconnectInterval: 3000,
       maxReconnectAttempts: 10,
       ...config
@@ -203,7 +193,7 @@ export class LeadVilleWebSocketClient {
     }
 
     this.reconnectAttempts++;
-    console.log('Attempting to reconnect (' + this.reconnectAttempts + '/' + this.config.maxReconnectAttempts + ')...');
+    console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.config.maxReconnectAttempts})...`);
 
     this.reconnectTimeout = window.setTimeout(() => {
       this.connect();
