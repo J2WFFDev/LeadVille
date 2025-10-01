@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { endpointConfig } from '../config/endpoints';
 
 interface LogEntryProps {
   log: {
@@ -188,7 +189,9 @@ export const LiveLogPage = () => {
     try {
       // Get data from shot_log database view endpoint
       console.log('Attempting to fetch from shot-log API...');
-      const response = await fetch(`http://${window.location.hostname}:8001/api/shot-log?limit=100`);
+      const shotLogUrl = `${endpointConfig.getApiUrl()}/shot-log?limit=100`;
+      console.log('Using shot-log URL:', shotLogUrl);
+      const response = await fetch(shotLogUrl);
       console.log('Shot-log API response status:', response.status, response.statusText);
       
       if (response.ok) {
@@ -203,7 +206,9 @@ export const LiveLogPage = () => {
       } else {
         console.error('Shot-log API failed with status:', response.status);
         // Fallback to regular logs but filter for timer/sensor context
-        const fallbackResponse = await fetch(`http://${window.location.hostname}:8001/api/logs?limit=100`);
+        const fallbackUrl = `${endpointConfig.getApiUrl()}/logs?limit=100`;
+        console.log('Trying fallback URL:', fallbackUrl);
+        const fallbackResponse = await fetch(fallbackUrl);
         if (fallbackResponse.ok) {
           const logs = await fallbackResponse.json();
           const timerSensorLogs = logs.filter((log: any) => 
@@ -230,7 +235,7 @@ export const LiveLogPage = () => {
     } catch (error) {
       console.error('Failed to load merged data:', error);
       setIsConnected(false);
-      setConnectionStatus('Network error');
+      setConnectionStatus('Network error: ' + error);
     }
   };
 
@@ -554,7 +559,7 @@ export const LiveLogPage = () => {
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>API: http://{window.location.hostname}:8001/api/shot-log</span>
+          <span>API: {endpointConfig.getApiUrl()}/shot-log</span>
           <span>Live streaming • Manual scroll</span>
         </div>
       </div>
