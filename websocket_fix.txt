@@ -1,0 +1,16 @@
+// Quick fix for websocket.ts line 199 syntax error
+// Copy this function and replace the attemptReconnect method in websocket.ts
+
+private attemptReconnect(): void {
+  if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
+    console.error('Max reconnection attempts reached');
+    return;
+  }
+
+  this.reconnectAttempts++;
+  console.log('Attempting to reconnect (' + this.reconnectAttempts + '/' + this.config.maxReconnectAttempts + ')...');
+
+  this.reconnectTimeout = window.setTimeout(() => {
+    this.connect();
+  }, this.config.reconnectInterval);
+}
