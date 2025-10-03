@@ -31,7 +31,9 @@ from pathlib import Path
 def setup_dual_logging():
     """Setup logging to both console and dedicated log files"""
     # Create logs directory if it doesn't exist
-    log_dir = Path(__file__).parent / 'logs' / 'console'
+    # Navigate from src/impact_bridge/ up to project root, then to logs/console
+    project_root = Path(__file__).parent.parent.parent
+    log_dir = project_root / 'logs' / 'console'
     log_dir.mkdir(parents=True, exist_ok=True)
     
     # Create console log file with timestamp
