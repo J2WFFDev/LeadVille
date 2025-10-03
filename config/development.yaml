@@ -41,7 +41,7 @@ enhanced_impact:
 # Shot Detection Settings (BT50 velocity in mm/s)
 shot_detection:
   threshold: 10.0               # Minimum mm/s deviation from baseline to flag a shot
-  min_duration: 6               # Samples (at 50Hz) a shot must persist
+  min_duration: 1               # Samples (at 50Hz) a shot must persist (1 for impact spikes, 6 for sustained shots)
   max_duration: 11              # Upper bound to reject long motion events
   min_interval: 1.0             # Seconds between accepted shots
 

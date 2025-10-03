@@ -38,14 +38,14 @@ class ShotDetector:
     
     Validated criteria (mm/s scale):
     - X-axis deviation exceeds the configurable threshold from baseline
-    - Duration: 6-11 consecutive samples (120-220ms at 50Hz)
+    - Duration: configurable consecutive samples (default 1 for impact detection, 6-11 for sustained shots)
     - Minimum 1 second interval between shots
     """
     
     def __init__(self, 
                  baseline_x: int = 0,
                  threshold: int = 30,
-                 min_duration: int = 6,
+                 min_duration: int = 1,
                  max_duration: int = 11,
                  min_interval_seconds: float = 1.0,
                  sampling_rate_hz: float = 50.0):
@@ -55,7 +55,7 @@ class ShotDetector:
         Args:
             baseline_x: Expected baseline X value (mm/s)
             threshold: Minimum deviation from baseline to trigger detection (mm/s)
-            min_duration: Minimum consecutive samples for valid shot (6)
+            min_duration: Minimum consecutive samples for valid shot (1 for impact detection, 6 for sustained shots)
             max_duration: Maximum consecutive samples for valid shot (11)
             min_interval_seconds: Minimum time between shots (1.0s)
             sampling_rate_hz: BT50 sampling rate (50Hz)
