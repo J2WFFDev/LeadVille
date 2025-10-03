@@ -707,8 +707,9 @@ class LeadVilleBridge:
                             vz_dev,
                             max_axis_dev,
                         )
+                    # Use max axis deviation for impact detection (sensor orientation-independent)
                     shot_event = self.shot_detector.process_sample(
-                        vx_dev,
+                        max_axis_dev,
                         corrected.get('timestamp'),
                     )
                     if shot_event:
