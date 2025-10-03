@@ -147,6 +147,10 @@ class RealTimeTimingCalibrator:
         # Try to correlate with pending shots
         asyncio.create_task(self._correlate_events())
     
+    def record_impact(self, timestamp: datetime, magnitude: float):
+        """Alias for add_impact_event for backward compatibility"""
+        self.add_impact_event(timestamp, magnitude, device_id="sensor")
+    
     async def _correlate_events(self):
         """Correlate pending shots with impacts"""
         new_pairs = []
