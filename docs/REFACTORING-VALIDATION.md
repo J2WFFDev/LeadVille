@@ -81,7 +81,7 @@ Once validated:
 # Test basic imports
 cd /home/jrwest/projects/LeadVille
 python3 -c "from src.impact_bridge.paths import CONFIG_DB, RUNTIME_DB, SAMPLES_DB; print('Paths OK')"
-python3 -c "from src.impact_bridge.ble.parsers import parse_5561, scan_and_parse; print('Parsers OK')"
+python3 -c "from src.impact_bridge.ble.parsers import parse_bt50_frame, scan_and_parse; print('Parsers OK')"
 
 # Test bridge startup
 python3 src/impact_bridge/leadville_bridge.py --test-mode

@@ -158,17 +158,17 @@ Notes:
   - Primary BT50 parser used by the `Bt50Client`. It expects 20-byte frames with header bytes `0x55,0x61` and parses int16 vx/vy/vz values. It returns `Bt50Sample` objects with timestamp and amplitude.
 
 - `src/impact_bridge/ble/wtvb_parse.py` (and variants)
-  - A more feature-rich parser referenced as `scan_and_parse`, `parse_flag61_frame`, and `parse_wtvb32_frame` in the monolithic bridge. It supports verbose parsing and optionally writing raw parsed frames into the capture DB for offline analysis (`write_db=True`). This is used when `dev_config` or `dev` mode enables sample logging.
+  - A more feature-rich parser referenced as `scan_and_parse`, `parse_bt50_frame`, and `parse_wtvb32_frame` in the monolithic bridge. It supports verbose parsing and optionally writing raw parsed frames into the capture DB for offline analysis (`write_db=True`). This is used when `dev_config` or `dev` mode enables sample logging.
 
-- `src/impact_bridge/ble/wtvb_parse_simple.py` (exports `parse_5561`)
-  - A compact/simple parser that returns scaled samples used by detection path and for real-time processing where low overhead is important.
+- `archive/legacy_parse_5561.py`
+  - Archived multi-sample parser preserved only for historical tooling. Active bridge code relies on `parse_bt50_frame` for the hot path.
 
 - `src/impact_bridge/ble/amg_parse.py` / `format_amg_event`
   - AMG timer parsers that decode timer frames into structured START/SHOT/STOP semantics and optional richer fields (current_shot, total_shots, timer_time). The Bridge uses these to persist `timer_events` and to correlate with `sensor_events`.
 
 Notes on parsers:
 - Parsers are organized as BLE-specific modules under `src/impact_bridge/ble/`.
-- Simple parser (`parse_5561`) is safe for the hot path (low CPU, used inside notification handler). Verbose parsers are allowed to perform additional IO (writing to DB or files) but should be called in an error-tolerant wrapper so detection isn't blocked by storage issues.
+- The unified BT50 parser (`parse_bt50_frame`) feeds the hot path. Verbose helpers may still write to disk, but wrap them in fault-tolerant blocks so detection isn't blocked by storage issues.
 
 ### Backend: services, important modules, and endpoints
 

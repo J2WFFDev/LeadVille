@@ -59,11 +59,11 @@ The system uses JSON-based configuration in `config/dev_config.json`:
 {
   "enhanced_impact": {
     "enabled": true,
-    "peak_threshold": 150.0,
+    "peak_threshold": 80.0,
     "onset_threshold": 30.0
   },
   "shot_detection": {
-    "threshold": 150.0,
+    "threshold": 30.0,
     "min_duration": 6,
     "max_duration": 11
   },
@@ -128,7 +128,7 @@ The system generates multiple log files:
 ### Key Algorithms
 
 #### Shot Detection
-- **Threshold-based detection**: Configurable raw count threshold
+- **Threshold-based detection**: Configurable velocity threshold (mm/s)
 - **Duration validation**: 6-11 sample duration requirement  
 - **Interval enforcement**: Minimum 1-second between shots
 - **Baseline calibration**: Dynamic zero-point establishment
@@ -192,12 +192,12 @@ mypy src/
 ## Configuration Parameters
 
 ### Enhanced Impact Detection
-- `peak_threshold`: Primary detection threshold (default: 150.0)
+- `peak_threshold`: Primary detection threshold (default: 80.0)
 - `onset_threshold`: Onset detection threshold (default: 30.0)  
 - `lookback_samples`: Samples to analyze for onset (default: 10)
 
 ### Shot Detection
-- `threshold`: Raw count change threshold (default: 150.0)
+- `threshold`: Velocity deviation threshold in mm/s (default: 30.0)
 - `min_duration`: Minimum valid shot duration (default: 6 samples)
 - `max_duration`: Maximum valid shot duration (default: 11 samples)
 - `min_interval_seconds`: Minimum time between shots (default: 1.0s)

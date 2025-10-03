@@ -48,7 +48,13 @@ class DevConfig:
             'enhanced_logging': {'enabled': False},
             'analysis_tools': {'enabled': False},
             'enhanced_impact': {'enabled': True},
-            'timing_calibration': {'enhanced_mode': True}
+            'timing_calibration': {'enhanced_mode': True},
+            'shot_detection': {
+                'threshold': 30.0,
+                'min_duration': 6,
+                'max_duration': 11,
+                'min_interval': 1.0,
+            }
         }
     
     def _apply_production_overrides(self):
@@ -167,8 +173,8 @@ class DevConfig:
     
     # Shot Detection Configuration
     def get_shot_threshold(self) -> float:
-        """Get shot detection threshold in g-force"""
-        return self.config.get('shot_detection', {}).get('threshold', 150.0)
+        """Get shot detection threshold in mm/s"""
+        return self.config.get('shot_detection', {}).get('threshold', 30.0)
     
     def get_shot_duration_range(self) -> tuple:
         """Get shot duration range (min, max) in samples"""

@@ -15,12 +15,12 @@ Connecting to the Pi
 
 Example `~/.ssh/config` entry:
 
-    Host leadville-pi
+    Host pitts
         HostName pitts
-        User Rpi
+        User jrwest
         IdentityFile ~/.ssh/id_rsa_leadville
 
-Then connect with: `ssh rpi` or use VS Code Remote-SSH `rpi` host.
+Then connect with: `ssh jrwest@pitts` or use VS Code Remote-SSH `pitts` host.
 
 If you must connect with a raw command: `ssh <user>@<pi-host-or-ip>` (replace `<user>` and `<pi-host-or-ip>` appropriately).
 
@@ -30,18 +30,18 @@ To make it easier for contributors and automated agents, we recommend adding a l
 
 Example `~/.ssh/config` entry to add locally (do NOT commit this file):
 
-    Host leadville-pi
+    Host pitts
         HostName pitts     # <replace-with-your-pi-hostname-or-ip>
         User rpi                   # <replace-with-your-pi-user>
         IdentityFile ~/.ssh/id_rsa_leadville
         IdentitiesOnly yes
 
-After you add this, connect with: `ssh leadville-pi`
+After you add this, connect with: `ssh jrwest@pitts`
 
 Notes on usage by contributors and agents
 - Do NOT commit private keys, passphrases, or the `~/.ssh/config` file to the repository. The alias is for local convenience only.
-- Agents and automation that run in CI or from trusted workstations can use the `leadville-pi` alias; if your environment uses a different alias or user, tell the agent which alias to use.
-- If an agent tries `ssh leadville-pi` and the host is unresolved, it's because your local `~/.ssh/config` doesn't contain the entry shown above. Add it locally or provide `user@ip` when asked.
+- Agents and automation that run in CI or from trusted workstations can use the `pitts` alias; if your environment uses a different alias or user, tell the agent which alias to use.
+- If an agent tries `ssh jrwest@pitts` and the host is unresolved, it's because your local `~/.ssh/config` doesn't contain the entry shown above. Add it locally or provide `user@ip` when asked.
 
 Where to document your Pi address for the team
 - If you want a non-secret, team-visible place to record the preferred alias and the placeholder HostName (without credentials), add it to `docs/ssh_setup.md` or to your private ops vault. The repo intentionally shouldn't contain private keys.

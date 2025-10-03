@@ -7,8 +7,8 @@ Type=simple
 User=jrwest
 Group=jrwest
 WorkingDirectory=/home/jrwest/projects/LeadVille
-Environment=PYTHONPATH=/home/jrwest/projects/LeadVille
-ExecStart=/usr/bin/python3 /home/jrwest/projects/LeadVille/leadville_bridge.py
+Environment=PYTHONPATH=/home/jrwest/projects/LeadVille/src
+ExecStart=/usr/bin/python3 -m impact_bridge.leadville_bridge
 ExecStartPost=/bin/sleep 5
 ExecStartPost=/usr/bin/python3 /home/jrwest/projects/LeadVille/scripts/start_fastapi.py
 Restart=always

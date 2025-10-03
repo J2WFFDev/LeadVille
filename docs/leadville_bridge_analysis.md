@@ -42,7 +42,7 @@ This is a **754-line Python script** that serves as the main production BLE-base
 - **STOP beep** (0x0108): String completion
 
 ### Sensor Events (BT50)
-- **Raw data parsing**: Uses `parse_5561()` function
+- **Raw data parsing**: Uses `parse_bt50_frame()` for single-sample velocity dicts
 - **Baseline correction**: Applies calibrated offsets
 - **Impact detection**: Multiple threshold-based algorithms
 - **Timing correlation**: Matches shots to impacts

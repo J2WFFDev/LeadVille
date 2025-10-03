@@ -97,23 +97,23 @@ def _i16_le_from_bytes(b: bytes) -> int:
     return struct.unpack('<h', b)[0]
 
 
-def parse_flag61_frame(frame: bytes, write_db: bool = False) -> Optional[Dict]:
-    """Parse a single Flag=0x61 frame (28 bytes total: 0x55 0x61 + 26 payload).
+def parse_bt50_frame(frame: bytes, write_db: bool = False) -> Optional[Dict]:
+    """Parse a standard BT50 velocity frame (flag 0x61, 28 bytes total).
 
-    Returns a dict with the parsed register values (integers) and human units
-    where applicable. If `write_db` is True the raw register values are written
-    to `db/bt50_samples.db` for later inspection.
+    Returns a dict with the parsed register values (integers) and derived
+    human-readable values. If `write_db` is True the raw register values are
+    written to `db/bt50_samples.db` for later inspection.
     """
     if not frame or len(frame) < 28:
-        logger.debug("parse_flag61_frame: frame too short")
+        logger.debug("parse_bt50_frame: frame too short")
         return None
     if frame[0] != 0x55 or frame[1] != 0x61:
-        logger.debug("parse_flag61_frame: invalid header")
+        logger.debug("parse_bt50_frame: invalid header")
         return None
 
     payload = frame[2:2 + 26]
     if len(payload) < 26:
-        logger.debug("parse_flag61_frame: incomplete payload")
+        logger.debug("parse_bt50_frame: incomplete payload")
         return None
 
     regs = [ _i16_le_from_bytes(payload[i:i+2]) for i in range(0, 26, 2) ]
@@ -138,10 +138,10 @@ def parse_flag61_frame(frame: bytes, write_db: bool = False) -> Optional[Dict]:
         "freq_z": fz,
     }
 
-    logger.debug(f"parse_flag61_frame: parsed={parsed}")
+    logger.debug(f"parse_bt50_frame: parsed={parsed}")
 
     if write_db:
-        _write_db_row(parsed, frame.hex(), parser="flag61")
+        _write_db_row(parsed, frame.hex(), parser="bt50")
 
     return parsed
 
@@ -219,9 +219,9 @@ def scan_and_parse(payload: bytes, write_db: bool = False) -> List[Dict]:
             # Try flag61 (28 bytes total)
             if i + 28 <= L:
                 frame = payload[i:i+28]
-                parsed = parse_flag61_frame(frame, write_db=write_db)
+                parsed = parse_bt50_frame(frame, write_db=write_db)
                 if parsed:
-                    results.append({"parser": "flag61", "offset": i, "parsed": parsed, "frame_hex": frame.hex()})
+                    results.append({"parser": "bt50", "offset": i, "parsed": parsed, "frame_hex": frame.hex()})
                     i += 28
                     continue
             # Try 32-byte WTVB frame
@@ -238,3 +238,7 @@ def scan_and_parse(payload: bytes, write_db: bool = False) -> List[Dict]:
             i += 1
 
     return results
+
+
+# Backwards compatibility export until callers migrate off the old name
+parse_flag61_frame = parse_bt50_frame

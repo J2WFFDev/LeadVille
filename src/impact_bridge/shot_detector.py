@@ -1,6 +1,10 @@
 """
-Real-time shot detection for BT50 sensor data.
-Based on analysis showing 6 shots with 150 count threshold and 6-11 sample duration.
+Real-time shot detection for BT50 sensor data expressed in mm/s.
+
+Original tuning assumed raw BT50 register counts with a baseline near 2089.
+Recent parser updates now deliver velocity deltas in millimetres per second,
+which are centred around zero. The detector therefore defaults to a lower
+threshold better aligned with the new units while remaining configurable.
 """
 import time
 from typing import Optional, List, Dict, Any
@@ -32,15 +36,15 @@ class ShotDetector:
     """
     Real-time shot detection for BT50 sensor data
     
-    Validated criteria:
-    - X-axis deviation > 150 counts from baseline (2089)
+    Validated criteria (mm/s scale):
+    - X-axis deviation exceeds the configurable threshold from baseline
     - Duration: 6-11 consecutive samples (120-220ms at 50Hz)
     - Minimum 1 second interval between shots
     """
     
     def __init__(self, 
-                 baseline_x: int = 2089,
-                 threshold: int = 150,
+                 baseline_x: int = 0,
+                 threshold: int = 30,
                  min_duration: int = 6,
                  max_duration: int = 11,
                  min_interval_seconds: float = 1.0,
@@ -49,8 +53,8 @@ class ShotDetector:
         Initialize shot detector
         
         Args:
-            baseline_x: Expected baseline X value (2089 from calibration)
-            threshold: Minimum deviation from baseline to trigger detection (150 counts)
+            baseline_x: Expected baseline X value (mm/s)
+            threshold: Minimum deviation from baseline to trigger detection (mm/s)
             min_duration: Minimum consecutive samples for valid shot (6)
             max_duration: Maximum consecutive samples for valid shot (11)
             min_interval_seconds: Minimum time between shots (1.0s)

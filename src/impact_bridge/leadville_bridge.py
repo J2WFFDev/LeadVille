@@ -12,6 +12,7 @@ import time
 import asyncio
 import logging
 import statistics
+import json
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from bleak import BleakClient, BleakScanner
@@ -65,10 +66,8 @@ logger = logging.getLogger(__name__)
 
 # Import the impact bridge components
 try:
-    # Prefer the verbose BLE parser for diagnostics; keep the original simple
-    # parse_5561 available to preserve existing behavior used throughout the
-    # Import parsers from the new consolidated parsers package
-    from impact_bridge.ble.parsers import scan_and_parse, parse_flag61_frame, parse_wtvb32_frame, parse_5561
+    # Prefer the verbose BLE parser for diagnostics; rely on the unified BT50 parser
+    from impact_bridge.ble.parsers import scan_and_parse, parse_bt50_frame
     from impact_bridge.paths import CONFIG_DB, RUNTIME_DB, SAMPLES_DB
     from impact_bridge.shot_detector import ShotDetector
     from impact_bridge.timing_calibration import RealTimeTimingCalibrator
@@ -94,7 +93,7 @@ AMG_TIMER_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 BT50_SENSOR_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb"
 
 # Default configuration values
-DEFAULT_IMPACT_THRESHOLD = 150  # Raw counts for impact detection
+DEFAULT_IMPACT_THRESHOLD = 30  # mm/s deviation for impact detection
 DEFAULT_CALIBRATION_SAMPLES = 100  # Samples for baseline calibration
 
 
@@ -324,16 +323,21 @@ class LeadVilleBridge:
             
         try:
             if COMPONENTS_AVAILABLE:
-                result = parse_5561(data)
-                if result and result['samples']:
-                    for sample in result['samples']:
-                        self.calibration_samples.append(sample)
-                        # Progress reporting every 10 samples
-                        if len(self.calibration_samples) % 10 == 0:
-                            print(f"📊 Collected {len(self.calibration_samples)}/{DEFAULT_CALIBRATION_SAMPLES} samples...")
-                        if len(self.calibration_samples) >= DEFAULT_CALIBRATION_SAMPLES:
-                            self.collecting_calibration = False
-                            break
+                parsed = parse_bt50_frame(data, write_db=False)
+                if parsed:
+                    sample = {
+                        'vx': parsed.get('vx', 0),
+                        'vy': parsed.get('vy', 0),
+                        'vz': parsed.get('vz', 0),
+                        'temperature_c': parsed.get('temperature_c'),
+                        'timestamp': time.time(),
+                    }
+                    self.calibration_samples.append(sample)
+                    # Progress reporting every 10 samples
+                    if len(self.calibration_samples) % 10 == 0:
+                        print(f"📊 Collected {len(self.calibration_samples)}/{DEFAULT_CALIBRATION_SAMPLES} samples...")
+                    if len(self.calibration_samples) >= DEFAULT_CALIBRATION_SAMPLES:
+                        self.collecting_calibration = False
         except Exception as e:
             self.logger.error(f"Calibration data collection failed: {e}")
             
@@ -415,7 +419,8 @@ class LeadVilleBridge:
             self.logger.info("✅ Calibration completed successfully!")
             self.logger.info(f"📊 Baseline established: X={self.baseline_x:.1f}, Y={self.baseline_y:.1f}, Z={self.baseline_z:.1f}")
             self.logger.info(f"📈 Noise levels: X=±{noise_x:.3f}, Y=±{noise_y:.3f}, Z=±{noise_z:.3f}")
-            self.logger.info(f"🎯 Impact threshold: 150 counts from baseline")
+            threshold_mm_s = dev_config.get_shot_threshold() if COMPONENTS_AVAILABLE else DEFAULT_IMPACT_THRESHOLD
+            self.logger.info(f"🎯 Impact threshold: {threshold_mm_s} mm/s from baseline")
             
             # Reset enhanced impact detector to clear any residual state
             if self.enhanced_impact_detector:
@@ -579,10 +584,28 @@ class LeadVilleBridge:
                     event_type TEXT,
                     split_seconds REAL,
                     split_cs INTEGER,
-                    raw_hex TEXT
+                    raw_hex TEXT,
+                    current_shot INTEGER,
+                    total_shots INTEGER,
+                    current_round INTEGER,
+                    string_total_time TEXT,
+                    parsed_json TEXT
                 )
                 """
             )
+            # Older deployments may lack the richer columns above; upgrade in place if needed.
+            cur.execute("PRAGMA table_info(timer_events)")
+            existing_columns = {row[1] for row in cur.fetchall()}
+            column_upgrades = {
+                "current_shot": "ALTER TABLE timer_events ADD COLUMN current_shot INTEGER",
+                "total_shots": "ALTER TABLE timer_events ADD COLUMN total_shots INTEGER",
+                "current_round": "ALTER TABLE timer_events ADD COLUMN current_round INTEGER",
+                "string_total_time": "ALTER TABLE timer_events ADD COLUMN string_total_time TEXT",
+                "parsed_json": "ALTER TABLE timer_events ADD COLUMN parsed_json TEXT",
+            }
+            for column, statement in column_upgrades.items():
+                if column not in existing_columns:
+                    cur.execute(statement)
             ts_ns = int(time.time() * 1e9)
             # Extract structured data for hybrid schema
             current_shot = None
@@ -641,64 +664,172 @@ class LeadVilleBridge:
                 # If verbose parser not available, ignore and continue
                 pass
 
-            # Parse sensor data using the simple parser (returns scaled vx/vy/vz)
-            result = parse_5561(data)
-            if not result or not result['samples']:
+            parsed = parse_bt50_frame(data, write_db=False)
+            if not parsed:
                 return
-            
-            # Apply baseline correction to samples using scaled values like TinTown
-            corrected_samples = []
-            for sample in result['samples']:
-                corrected_sample = sample.copy()
-                corrected_sample['vx_corrected'] = sample['vx'] - self.baseline_x
-                corrected_sample['vy_corrected'] = sample['vy'] - self.baseline_y  
-                corrected_sample['vz_corrected'] = sample['vz'] - self.baseline_z
-                corrected_samples.append(corrected_sample)
-                
+
+            sample_time = time.time()
+            sample = {
+                'vx': parsed.get('vx', 0),
+                'vy': parsed.get('vy', 0),
+                'vz': parsed.get('vz', 0),
+                'temperature_c': parsed.get('temperature_c'),
+                'disp_x': parsed.get('disp_x'),
+                'disp_y': parsed.get('disp_y'),
+                'disp_z': parsed.get('disp_z'),
+                'freq_x': parsed.get('freq_x'),
+                'freq_y': parsed.get('freq_y'),
+                'freq_z': parsed.get('freq_z'),
+                'timestamp': sample_time,
+            }
+
+            corrected_sample = sample.copy()
+            corrected_sample['vx_corrected'] = sample['vx'] - self.baseline_x
+            corrected_sample['vy_corrected'] = sample['vy'] - self.baseline_y
+            corrected_sample['vz_corrected'] = sample['vz'] - self.baseline_z
+            corrected_samples = [corrected_sample]
+
             # Process samples for shot detection
             if self.shot_detector:
-                detected_shots = self.shot_detector.process_samples(corrected_samples)
-                
+                detected_shots = []
+                for corrected in corrected_samples:
+                    vx_dev = corrected['vx_corrected']
+                    vy_dev = corrected['vy_corrected']
+                    vz_dev = corrected['vz_corrected']
+                    max_axis_dev = max(abs(vx_dev), abs(vy_dev), abs(vz_dev))
+                    if max_axis_dev > 1:
+                        self.logger.debug(
+                            "BT50 corrected sample: vx=%.2f mm/s, vy=%.2f mm/s, vz=%.2f mm/s (max %.2f)",
+                            vx_dev,
+                            vy_dev,
+                            vz_dev,
+                            max_axis_dev,
+                        )
+                    shot_event = self.shot_detector.process_sample(
+                        vx_dev,
+                        corrected.get('timestamp'),
+                    )
+                    if shot_event:
+                        detected_shots.append(shot_event)
+
                 for shot in detected_shots:
                     self.impact_counter += 1
-                    
+
+                    shot_time = datetime.fromtimestamp(shot.timestamp)
+
                     # Calculate time from string start
                     time_from_start = 0.0
                     if self.start_beep_time:
-                        time_from_start = (shot.timestamp - self.start_beep_time).total_seconds()
-                    
+                        time_from_start = (shot_time - self.start_beep_time).total_seconds()
+
                     # Calculate time from last shot
                     time_from_shot = 0.0
                     if self.previous_shot_time:
-                        time_from_shot = (shot.timestamp - self.previous_shot_time).total_seconds()
-                    
-                    self.logger.info(f"💥 String {self.current_string_number}, Impact #{self.impact_counter} - Time {time_from_start:.2f}s, Shot->Impact {time_from_shot:.3f}s, Peak {shot.peak_magnitude:.0f}g")
-                    
-                    # Record impact for timing correlation
+                        time_from_shot = (shot_time - self.previous_shot_time).total_seconds()
+
+                    self.logger.info(
+                        f"💥 String {self.current_string_number}, Impact #{self.impact_counter} "
+                        f"- Time {time_from_start:.2f}s, Shot->Impact {time_from_shot:.3f}s, "
+                        f"Peak {shot.max_deviation:.0f} mm/s"
+                    )
+
                     if self.timing_calibrator:
-                        self.timing_calibrator.record_impact(shot.timestamp, shot.peak_magnitude)
-            
+                        self.timing_calibrator.record_impact(shot_time, shot.max_deviation)
+
+                    # Log impact to database for downstream analysis
+                    try:
+                        conn = sqlite3.connect(str(RUNTIME_DB))
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            """
+                            CREATE TABLE IF NOT EXISTS sensor_events (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                ts_utc TEXT NOT NULL,
+                                sensor_id TEXT NOT NULL,
+                                magnitude REAL,
+                                features_json TEXT,
+                                created_at TEXT NOT NULL
+                            );
+                            """
+                        )
+                        cursor.execute(
+                            "CREATE INDEX IF NOT EXISTS idx_sensor_events_ts ON sensor_events(ts_utc)"
+                        )
+
+                        sensor_mac = characteristic.service.device.address.replace(':', '').upper()
+
+                        cursor.execute(
+                            """
+                                INSERT INTO sensor_events (ts_utc, sensor_id, magnitude, features_json, created_at)
+                                VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (
+                                shot_time.isoformat(),
+                                sensor_mac,
+                                shot.max_deviation,
+                                json.dumps(
+                                    {
+                                        'impact_counter': self.impact_counter,
+                                        'string_number': self.current_string_number,
+                                        'time_from_start': time_from_start,
+                                        'time_from_shot': time_from_shot,
+                                        'duration_samples': shot.duration_samples,
+                                        'impact_timestamp': shot_time.isoformat(),
+                                        'x_values': shot.x_values,
+                                    }
+                                ),
+                                datetime.now().isoformat(),
+                            ),
+                        )
+
+                        conn.commit()
+                        conn.close()
+                        self.logger.debug(
+                            f"💾 Impact logged to database: sensor={sensor_mac}, magnitude={shot.max_deviation}"
+                        )
+                    except Exception as db_error:
+                        self.logger.error(f"Failed to log impact to database: {db_error}")
+
             # Enhanced impact detection (if enabled)
             if self.enhanced_impact_detector:
-                enhanced_impacts = self.enhanced_impact_detector.process_samples(
-                    corrected_samples, 0  # baseline_x = 0 since we already corrected
-                )
-                
+                enhanced_impacts = []
+                for corrected in corrected_samples:
+                    magnitude = (
+                        corrected['vx_corrected'] ** 2
+                        + corrected['vy_corrected'] ** 2
+                        + corrected['vz_corrected'] ** 2
+                    ) ** 0.5
+                    timestamp = datetime.fromtimestamp(corrected.get('timestamp', time.time()))
+                    raw_values = [corrected['vx'], corrected['vy'], corrected['vz']]
+                    corrected_values = [
+                        corrected['vx_corrected'],
+                        corrected['vy_corrected'],
+                        corrected['vz_corrected'],
+                    ]
+
+                    impact_event = self.enhanced_impact_detector.process_sample(
+                        timestamp, raw_values, corrected_values, magnitude
+                    )
+                    if impact_event:
+                        enhanced_impacts.append(impact_event)
+
                 for impact in enhanced_impacts:
-                    # Calculate time from string start
                     time_from_start = 0.0
                     if self.start_beep_time:
                         time_from_start = (impact.onset_timestamp - self.start_beep_time).total_seconds()
-                    
-                    # Calculate time from last shot
+
                     time_from_shot = 0.0
                     if self.previous_shot_time:
                         time_from_shot = (impact.onset_timestamp - self.previous_shot_time).total_seconds()
-                    
+
                     impact_number = getattr(self, 'enhanced_impact_counter', 0) + 1
                     setattr(self, 'enhanced_impact_counter', impact_number)
-                    
-                    self.logger.info(f"💥 String {self.current_string_number}, Enhanced Impact #{impact_number} - Time {time_from_start:.2f}s, Shot->Impact {time_from_shot:.3f}s, Peak {impact.peak_magnitude:.0f}g")
+
+                    self.logger.info(
+                        f"💥 String {self.current_string_number}, Enhanced Impact #{impact_number} "
+                        f"- Time {time_from_start:.2f}s, Shot->Impact {time_from_shot:.3f}s, "
+                        f"Peak {impact.peak_magnitude:.0f} mm/s"
+                    )
                     
         except Exception as e:
             self.logger.error(f"BT50 processing failed: {e}")
@@ -844,10 +975,11 @@ class LeadVilleBridge:
             
             if COMPONENTS_AVAILABLE and self.calibration_complete:
                 print("\n=== AUTOMATIC CALIBRATION BRIDGE WITH SHOT DETECTION ===")
+                threshold_mm_s = dev_config.get_shot_threshold() if COMPONENTS_AVAILABLE else DEFAULT_IMPACT_THRESHOLD
                 print("✨ Dynamic baseline calibration - establishes fresh zero on every startup")
-                print("🎯 Shot Detection: 150 count threshold, 6-11 sample duration, 1s interval")
+                print(f"🎯 Shot Detection: {threshold_mm_s} mm/s threshold, 6-11 sample duration, 1s interval")
                 print(f"📊 Current baseline: X={self.baseline_x}, Y={self.baseline_y}, Z={self.baseline_z} (auto-calibrated)")
-                print(f"⚡ Impact threshold: {DEFAULT_IMPACT_THRESHOLD} counts from dynamic baseline")
+                print(f"⚡ Impact threshold: {threshold_mm_s} mm/s from dynamic baseline")
                 print("🔄 Baseline automatically corrects for any sensor orientation")
                 print("Press CTRL+C to stop\n")
             

@@ -33,11 +33,25 @@ analysis_tools:
 # Enhanced Impact Detection Settings
 enhanced_impact:
   enabled: true
-  onset_threshold: 30.0         # Onset detection threshold (g)
-  peak_threshold: 150.0         # Peak detection threshold (g)  
+  onset_threshold: 30.0         # Onset detection threshold (acceleration counts)
+  peak_threshold: 80.0          # Peak detection threshold (acceleration counts) - ADJUST THIS
   lookback_samples: 10          # Samples to analyze for onset
   confidence_logging: true      # Log confidence scores and analysis
   
+# Shot Detection Settings (BT50 velocity in mm/s)
+shot_detection:
+  threshold: 10.0               # Minimum mm/s deviation from baseline to flag a shot
+  min_duration: 6               # Samples (at 50Hz) a shot must persist
+  max_duration: 11              # Upper bound to reject long motion events
+  min_interval: 1.0             # Seconds between accepted shots
+
+# Impact Threshold Notes:
+# - Values are in raw acceleration counts (not g-force)
+# - Typical sensor movements: 10-50 counts
+# - Light impacts: 50-100 counts
+# - Hard impacts: 100-200+ counts
+# - Adjust peak_threshold based on your test data
+
 # Timing Calibration Development
 timing_calibration:
   enhanced_mode: true           # Use enhanced timing correlation
