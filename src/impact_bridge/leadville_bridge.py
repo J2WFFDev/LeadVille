@@ -759,7 +759,8 @@ class LeadVilleBridge:
                             "CREATE INDEX IF NOT EXISTS idx_sensor_events_ts ON sensor_events(ts_utc)"
                         )
 
-                        sensor_mac = characteristic.service.device.address.replace(':', '').upper()
+                        # Get sensor MAC from the connected client
+                        sensor_mac = self.bt50_client.address.replace(':', '').upper() if self.bt50_client else 'UNKNOWN'
 
                         cursor.execute(
                             """
